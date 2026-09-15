@@ -103,10 +103,15 @@ export default defineSchema({
     .index("by_server", ["serverId"])
     .index("by_category", ["categoryId"]),
 
-  // One row per RealtimeKit meeting "session" for a voice channel, created
-  // lazily on first join. Kept separate from `channels` (which stays purely
-  // structural) so past sessions leave an audit trail instead of a single
-  // field being overwritten forever.
+  // The persistent RealtimeKit *meeting* backing a voice channel, created
+  // lazily on the first join and reused forever after. A RealtimeKit meeting
+  // is a durable room; live "sessions" start and end inside it on their own
+  // (the SDK/webhooks track those), and participant tokens stay valid across
+  // sessions of the same meeting — which is what lets us cache tokens in
+  // `voiceParticipantTokens` and skip the REST round trip on every join.
+  // `status` stays "active" for the life of the channel; rows with "ended"
+  // are legacy leftovers from when a new meeting was created per session.
+  // Kept separate from `channels`, which stays purely structural.
   voiceChannelSessions: defineTable({
     channelId: v.id("channels"),
     serverId: v.id("servers"),
@@ -129,11 +134,38 @@ export default defineSchema({
     rtkParticipantId: v.optional(v.string()),
     joinedAt: v.number(),
     lastSeenAt: v.number(),
+    // Random, client-generated secret for this tab's call. Lets the tab
+    // remove its own row without auth via `navigator.sendBeacon` on unload
+    // (a normal authenticated mutation can't complete during page teardown).
+    beaconToken: v.optional(v.string()),
   })
     .index("by_channel", ["channelId"])
     .index("by_server", ["serverId"])
     .index("by_user", ["userId"])
-    .index("by_rtkMeetingId_and_userId", ["rtkMeetingId", "userId"]),
+    .index("by_rtkMeetingId_and_userId", ["rtkMeetingId", "userId"])
+    .index("by_beaconToken", ["beaconToken"])
+    .index("by_lastSeenAt", ["lastSeenAt"]),
+
+  // Cached RealtimeKit participant tokens, one per (user, channel). Tokens
+  // are issued by the REST API once, are valid for ~100 days, and can join
+  // any number of live sessions of the same meeting — so after the first
+  // join of a channel, later joins need no server round trip at all. Only
+  // ever returned to the owning user. `displayName` is recorded because the
+  // name is baked into the RealtimeKit participant at creation; a rename
+  // invalidates the cached token so a fresh one is issued.
+  voiceParticipantTokens: defineTable({
+    userId: v.id("users"),
+    channelId: v.id("channels"),
+    serverId: v.id("servers"),
+    rtkMeetingId: v.string(),
+    rtkParticipantId: v.string(),
+    authToken: v.string(),
+    displayName: v.string(),
+    issuedAt: v.number(),
+  })
+    .index("by_user_and_channel", ["userId", "channelId"])
+    .index("by_user", ["userId"])
+    .index("by_channel", ["channelId"]),
 
   // Per-channel permission overrides (Discord-style channel overwrites),
   // layered on top of the server-wide role bitmask from

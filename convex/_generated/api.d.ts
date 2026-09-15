@@ -11,6 +11,7 @@
 import type * as categories from "../categories.js";
 import type * as channelPermissions from "../channelPermissions.js";
 import type * as channels from "../channels.js";
+import type * as crons from "../crons.js";
 import type * as dms from "../dms.js";
 import type * as friends from "../friends.js";
 import type * as http from "../http.js";
@@ -34,6 +35,7 @@ declare const fullApi: ApiFromModules<{
   categories: typeof categories;
   channelPermissions: typeof channelPermissions;
   channels: typeof channels;
+  crons: typeof crons;
   dms: typeof dms;
   friends: typeof friends;
   http: typeof http;

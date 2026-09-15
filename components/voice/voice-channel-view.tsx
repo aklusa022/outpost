@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useQuery } from "convex/react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
@@ -38,10 +39,19 @@ export function VoiceChannelView({
   channelId: Id<"channels">;
   channelName: string;
 }) {
-  const { meeting, status, activeChannelId, join } = useVoiceCall();
+  const { meeting, status, activeChannelId, join, prepare, discardPrepared } = useVoiceCall();
   const { user: me } = useCurrentUser();
   const participants = useQuery(api.voiceChannels.listVoiceParticipants, { serverId });
   const roster = participants?.filter((p) => p.channelId === channelId) ?? [];
+
+  // Pre-warm the call while the user is looking at the Join button, so the
+  // click itself only has to do the media join. Torn down if they navigate
+  // away without joining.
+  useEffect(() => {
+    if (status !== "idle") return;
+    prepare(channelId);
+    return () => discardPrepared(channelId);
+  }, [status, channelId, prepare, discardPrepared]);
 
   if (activeChannelId === channelId && status === "connected" && meeting) {
     return <RtkMeetingView meeting={meeting} />;

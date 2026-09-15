@@ -7,11 +7,21 @@ import {
   internalMutation,
   internalAction,
   MutationCtx,
+  QueryCtx,
 } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { Doc, Id } from "./_generated/dataModel";
 import { getCurrentUserOrThrow } from "./users";
 import { PERMISSIONS, requireMembership, requireChannelPermission } from "./permissions";
+
+// RealtimeKit participant tokens are valid for 100 days. We re-issue well
+// before that so a cached token never expires mid-call.
+const TOKEN_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
+// A participant row whose heartbeat is older than this is considered dead
+// (tab killed, network gone) and gets reaped by the cron in `crons.ts`. The
+// client heartbeats every 20s, so this allows three missed beats.
+export const STALE_PARTICIPANT_MS = 60_000;
 
 async function rtkFetch(path: string, method: "GET" | "POST", body?: unknown) {
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
@@ -84,8 +94,33 @@ export const myActiveCall = query({
   },
 });
 
+async function getChannelMeeting(ctx: QueryCtx | MutationCtx, channelId: Id<"channels">) {
+  return ctx.db
+    .query("voiceChannelSessions")
+    .withIndex("by_channel_and_status", (q) => q.eq("channelId", channelId).eq("status", "active"))
+    .unique();
+}
+
+// A cached token is usable only if it belongs to the channel's current
+// meeting, was issued under the user's current display name (RealtimeKit
+// bakes the name into the participant), and is comfortably inside its
+// validity window. `now` is passed in by the caller (mutations/actions may
+// read the clock; queries must not).
+function isTokenFresh(
+  token: Doc<"voiceParticipantTokens">,
+  rtkMeetingId: string,
+  displayName: string,
+  now: number,
+) {
+  return (
+    token.rtkMeetingId === rtkMeetingId &&
+    token.displayName === displayName &&
+    now - token.issuedAt < TOKEN_MAX_AGE_MS
+  );
+}
+
 export const assertCanJoin = internalQuery({
-  args: { channelId: v.id("channels") },
+  args: { channelId: v.id("channels"), now: v.number() },
   handler: async (ctx, args) => {
     const me = await getCurrentUserOrThrow(ctx);
     const channel = await ctx.db.get(args.channelId);
@@ -93,30 +128,30 @@ export const assertCanJoin = internalQuery({
     if (channel.type !== "voice") throw new Error("Not a voice channel");
     await requireChannelPermission(ctx, args.channelId, me._id, PERMISSIONS.CONNECT);
 
-    const session = await ctx.db
-      .query("voiceChannelSessions")
-      .withIndex("by_channel_and_status", (q) =>
-        q.eq("channelId", args.channelId).eq("status", "active"),
-      )
-      .unique();
+    const meeting = await getChannelMeeting(ctx, args.channelId);
+    const activeRtkMeetingId = meeting?.rtkMeetingId ?? null;
 
-    return {
-      me,
-      channel,
-      activeRtkMeetingId: session?.rtkMeetingId ?? null,
-    };
+    let cachedToken: { authToken: string; rtkMeetingId: string } | null = null;
+    if (activeRtkMeetingId) {
+      const token = await ctx.db
+        .query("voiceParticipantTokens")
+        .withIndex("by_user_and_channel", (q) =>
+          q.eq("userId", me._id).eq("channelId", args.channelId),
+        )
+        .unique();
+      if (token && isTokenFresh(token, activeRtkMeetingId, me.displayName, args.now)) {
+        cachedToken = { authToken: token.authToken, rtkMeetingId: token.rtkMeetingId };
+      }
+    }
+
+    return { me, channel, activeRtkMeetingId, cachedToken };
   },
 });
 
 export const recordMeetingCreated = internalMutation({
   args: { channelId: v.id("channels"), serverId: v.id("servers"), rtkMeetingId: v.string() },
   handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("voiceChannelSessions")
-      .withIndex("by_channel_and_status", (q) =>
-        q.eq("channelId", args.channelId).eq("status", "active"),
-      )
-      .unique();
+    const existing = await getChannelMeeting(ctx, args.channelId);
     if (existing) return existing.rtkMeetingId;
     await ctx.db.insert("voiceChannelSessions", {
       channelId: args.channelId,
@@ -129,55 +164,93 @@ export const recordMeetingCreated = internalMutation({
   },
 });
 
-async function upsertVoiceParticipant(
-  ctx: MutationCtx,
+export const storeVoiceToken = internalMutation({
   args: {
-    channelId: Id<"channels">;
-    serverId: Id<"servers">;
-    userId: Id<"users">;
-    rtkMeetingId: string;
-    rtkParticipantId?: string;
-  },
-) {
-  const elsewhere = await ctx.db
-    .query("voiceParticipants")
-    .withIndex("by_user", (q) => q.eq("userId", args.userId))
-    .unique();
-  if (elsewhere) await ctx.db.delete(elsewhere._id);
-
-  await ctx.db.insert("voiceParticipants", {
-    channelId: args.channelId,
-    serverId: args.serverId,
-    userId: args.userId,
-    rtkMeetingId: args.rtkMeetingId,
-    rtkParticipantId: args.rtkParticipantId,
-    joinedAt: Date.now(),
-    lastSeenAt: Date.now(),
-  });
-}
-
-export const recordUserJoinedVoiceChannel = internalMutation({
-  args: {
+    userId: v.id("users"),
     channelId: v.id("channels"),
     serverId: v.id("servers"),
-    userId: v.id("users"),
     rtkMeetingId: v.string(),
-    rtkParticipantId: v.optional(v.string()),
+    rtkParticipantId: v.string(),
+    authToken: v.string(),
+    displayName: v.string(),
   },
   handler: async (ctx, args) => {
-    await upsertVoiceParticipant(ctx, args);
+    const existing = await ctx.db
+      .query("voiceParticipantTokens")
+      .withIndex("by_user_and_channel", (q) =>
+        q.eq("userId", args.userId).eq("channelId", args.channelId),
+      )
+      .unique();
+    const doc = { ...args, issuedAt: Date.now() };
+    if (existing) await ctx.db.replace(existing._id, doc);
+    else await ctx.db.insert("voiceParticipantTokens", doc);
   },
 });
 
-export const joinVoiceChannel = action({
-  args: { channelId: v.id("channels") },
-  handler: async (ctx, args): Promise<{ authToken: string; meetingId: string }> => {
+// Every cached token the caller may currently use, so the client can join
+// a channel with zero server round trips. Filtered by a live CONNECT check
+// per channel: this query is reactive, so revoking the permission removes
+// the token from every subscribed client immediately.
+export const myVoiceTokens = query({
+  args: { now: v.number() },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return [];
+    const me = await getCurrentUserOrThrow(ctx);
+    const tokens = await ctx.db
+      .query("voiceParticipantTokens")
+      .withIndex("by_user", (q) => q.eq("userId", me._id))
+      .take(200);
+
+    const usable: {
+      channelId: Id<"channels">;
+      serverId: Id<"servers">;
+      authToken: string;
+      rtkMeetingId: string;
+    }[] = [];
+    for (const token of tokens) {
+      const meeting = await getChannelMeeting(ctx, token.channelId);
+      if (!meeting) continue;
+      if (!isTokenFresh(token, meeting.rtkMeetingId, me.displayName, args.now)) continue;
+      try {
+        await requireChannelPermission(ctx, token.channelId, me._id, PERMISSIONS.CONNECT);
+      } catch {
+        continue;
+      }
+      usable.push({
+        channelId: token.channelId,
+        serverId: token.serverId,
+        authToken: token.authToken,
+        rtkMeetingId: token.rtkMeetingId,
+      });
+    }
+    return usable;
+  },
+});
+
+// Returns a RealtimeKit participant token for the caller in this channel,
+// issuing one via the REST API only when there is no fresh cached token
+// (or when `force` is set — the client uses that after the SDK rejects a
+// cached token). The channel's meeting is created on first use.
+export const ensureVoiceToken = action({
+  args: { channelId: v.id("channels"), force: v.optional(v.boolean()) },
+  handler: async (ctx, args): Promise<{ authToken: string; rtkMeetingId: string }> => {
     const {
       me,
       channel,
       activeRtkMeetingId,
-    }: { me: Doc<"users">; channel: Doc<"channels">; activeRtkMeetingId: string | null } =
-      await ctx.runQuery(internal.voiceChannels.assertCanJoin, { channelId: args.channelId });
+      cachedToken,
+    }: {
+      me: Doc<"users">;
+      channel: Doc<"channels">;
+      activeRtkMeetingId: string | null;
+      cachedToken: { authToken: string; rtkMeetingId: string } | null;
+    } = await ctx.runQuery(internal.voiceChannels.assertCanJoin, {
+      channelId: args.channelId,
+      now: Date.now(),
+    });
+
+    if (cachedToken && !args.force) return cachedToken;
 
     let rtkMeetingId = activeRtkMeetingId;
     if (!rtkMeetingId) {
@@ -196,19 +269,99 @@ export const joinVoiceChannel = action({
       preset_name: process.env.REALTIMEKIT_PRESET_NAME,
       custom_participant_id: me._id,
     });
+    const authToken = participant.token as string;
 
-    // Fire-and-forget: the client only needs authToken/meetingId below. The
-    // scheduler guarantees this write runs, it just no longer blocks the
-    // response on the round trip.
-    await ctx.scheduler.runAfter(0, internal.voiceChannels.recordUserJoinedVoiceChannel, {
+    await ctx.runMutation(internal.voiceChannels.storeVoiceToken, {
+      userId: me._id,
+      channelId: args.channelId,
+      serverId: channel.serverId,
+      rtkMeetingId,
+      rtkParticipantId: participant.id as string,
+      authToken,
+      displayName: me.displayName,
+    });
+
+    return { authToken, rtkMeetingId };
+  },
+});
+
+async function upsertVoiceParticipant(
+  ctx: MutationCtx,
+  args: {
+    channelId: Id<"channels">;
+    serverId: Id<"servers">;
+    userId: Id<"users">;
+    rtkMeetingId: string;
+    rtkParticipantId?: string;
+    beaconToken?: string;
+  },
+) {
+  const existing = await ctx.db
+    .query("voiceParticipants")
+    .withIndex("by_user", (q) => q.eq("userId", args.userId))
+    .unique();
+
+  // Already in this very channel (e.g. the webhook confirming a join the
+  // client already recorded): just refresh, keeping joinedAt/beaconToken.
+  if (existing && existing.channelId === args.channelId) {
+    await ctx.db.patch(existing._id, {
+      lastSeenAt: Date.now(),
+      rtkMeetingId: args.rtkMeetingId,
+      ...(args.rtkParticipantId ? { rtkParticipantId: args.rtkParticipantId } : {}),
+      ...(args.beaconToken ? { beaconToken: args.beaconToken } : {}),
+    });
+    return;
+  }
+
+  // One call per user: moving channels replaces the old row.
+  if (existing) await ctx.db.delete(existing._id);
+
+  await ctx.db.insert("voiceParticipants", {
+    channelId: args.channelId,
+    serverId: args.serverId,
+    userId: args.userId,
+    rtkMeetingId: args.rtkMeetingId,
+    rtkParticipantId: args.rtkParticipantId,
+    beaconToken: args.beaconToken,
+    joinedAt: Date.now(),
+    lastSeenAt: Date.now(),
+  });
+}
+
+export const recordUserJoinedVoiceChannel = internalMutation({
+  args: {
+    channelId: v.id("channels"),
+    serverId: v.id("servers"),
+    userId: v.id("users"),
+    rtkMeetingId: v.string(),
+    rtkParticipantId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await upsertVoiceParticipant(ctx, args);
+  },
+});
+
+// Called by the client the moment it starts joining (in parallel with the
+// WebRTC join), so everyone else's roster updates at click time. Also the
+// hard authorization guard: a client holding a cached token but no longer
+// allowed to CONNECT fails here and tears its call down.
+export const markJoined = mutation({
+  args: { channelId: v.id("channels"), beaconToken: v.string() },
+  handler: async (ctx, args) => {
+    const me = await getCurrentUserOrThrow(ctx);
+    const channel = await ctx.db.get(args.channelId);
+    if (!channel) throw new Error("Channel not found");
+    if (channel.type !== "voice") throw new Error("Not a voice channel");
+    await requireChannelPermission(ctx, args.channelId, me._id, PERMISSIONS.CONNECT);
+    const meeting = await getChannelMeeting(ctx, args.channelId);
+    if (!meeting) throw new Error("Voice channel has no meeting yet");
+    await upsertVoiceParticipant(ctx, {
       channelId: args.channelId,
       serverId: channel.serverId,
       userId: me._id,
-      rtkMeetingId,
-      rtkParticipantId: participant.id as string | undefined,
+      rtkMeetingId: meeting.rtkMeetingId,
+      beaconToken: args.beaconToken,
     });
-
-    return { authToken: participant.token as string, meetingId: rtkMeetingId };
   },
 });
 
@@ -219,6 +372,20 @@ export const leaveVoiceChannel = mutation({
     const row = await ctx.db
       .query("voiceParticipants")
       .withIndex("by_user", (q) => q.eq("userId", me._id))
+      .unique();
+    if (row) await ctx.db.delete(row._id);
+  },
+});
+
+// Deliberately unauthenticated: it's sent via `navigator.sendBeacon` while
+// the tab is unloading, where no auth'd Convex call can complete. The only
+// thing it can do is delete the one row carrying this random token.
+export const leaveByBeacon = mutation({
+  args: { beaconToken: v.string() },
+  handler: async (ctx, args) => {
+    const row = await ctx.db
+      .query("voiceParticipants")
+      .withIndex("by_beaconToken", (q) => q.eq("beaconToken", args.beaconToken))
       .unique();
     if (row) await ctx.db.delete(row._id);
   },
@@ -236,10 +403,28 @@ export const heartbeat = mutation({
   },
 });
 
-// Note: for the joiner's own row, this fires once via the scheduled write in
-// `joinVoiceChannel` and once again here when their own webhook arrives —
-// both go through the same delete-then-insert upsert, so it's a harmless
-// redundant write, not a correctness issue.
+// Last-resort cleanup for clients that vanished without leaving (crash,
+// network loss) and whose RealtimeKit webhook never arrived. Runs from
+// `crons.ts`; the leave button, the unload beacon, and the webhook all
+// clear rows far sooner in the normal cases.
+export const reapStaleVoiceParticipants = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const cutoff = Date.now() - STALE_PARTICIPANT_MS;
+    const stale = await ctx.db
+      .query("voiceParticipants")
+      .withIndex("by_lastSeenAt", (q) => q.lt("lastSeenAt", cutoff))
+      .take(100);
+    for (const row of stale) await ctx.db.delete(row._id);
+    if (stale.length === 100) {
+      await ctx.scheduler.runAfter(0, internal.voiceChannels.reapStaleVoiceParticipants, {});
+    }
+  },
+});
+
+// Note: for the joiner's own row, this fires once via `markJoined` and once
+// again here when their own webhook arrives — the upsert treats a repeat for
+// the same channel as a refresh, so nothing is lost.
 export const reconcileParticipantJoined = internalMutation({
   args: { rtkMeetingId: v.string(), userId: v.id("users") },
   handler: async (ctx, args) => {
@@ -270,21 +455,17 @@ export const reconcileParticipantLeft = internalMutation({
   },
 });
 
+// A RealtimeKit *session* ended (last participant left). The meeting itself
+// persists and is reused for the channel's next call, so the session row is
+// left untouched; only lingering participant rows are cleared.
 export const reconcileMeetingEnded = internalMutation({
   args: { rtkMeetingId: v.string() },
   handler: async (ctx, args) => {
-    const session = await ctx.db
-      .query("voiceChannelSessions")
-      .withIndex("by_rtkMeetingId", (q) => q.eq("rtkMeetingId", args.rtkMeetingId))
-      .unique();
-    if (session && session.status === "active") {
-      await ctx.db.patch(session._id, { status: "ended", endedAt: Date.now() });
-    }
-
-    const rows = await ctx.db.query("voiceParticipants").collect();
-    for (const row of rows) {
-      if (row.rtkMeetingId === args.rtkMeetingId) await ctx.db.delete(row._id);
-    }
+    const rows = await ctx.db
+      .query("voiceParticipants")
+      .withIndex("by_rtkMeetingId_and_userId", (q) => q.eq("rtkMeetingId", args.rtkMeetingId))
+      .collect();
+    for (const row of rows) await ctx.db.delete(row._id);
   },
 });
 

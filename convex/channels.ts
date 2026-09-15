@@ -156,6 +156,11 @@ export const deleteChannel = mutation({
         .withIndex("by_channel", (q) => q.eq("channelId", args.channelId))
         .collect();
       for (const participant of participants) await ctx.db.delete(participant._id);
+      const tokens = await ctx.db
+        .query("voiceParticipantTokens")
+        .withIndex("by_channel", (q) => q.eq("channelId", args.channelId))
+        .collect();
+      for (const token of tokens) await ctx.db.delete(token._id);
     }
 
     const overrides = await ctx.db

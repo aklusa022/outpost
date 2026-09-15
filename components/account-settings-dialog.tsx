@@ -107,7 +107,7 @@ export function AccountSettingsDialog({
               v && setStatus({ status: v as "online" | "idle" | "dnd" | "invisible" })
             }
           />
-          <Button disabled={!dirty || saving} onClick={handleSave} className="w-full">
+          <Button disabled={!dirty || saving} onClick={handleSave} className="w-full mt-2 mb-2">
             Save changes
           </Button>
         </div>
@@ -116,19 +116,20 @@ export function AccountSettingsDialog({
 
         <div className="space-y-2">
           <Button
+            icon={<ShieldCheckIcon/>}
             variant="outline"
             className="w-full justify-start gap-2"
             onClick={() => clerk.openUserProfile()}
           >
-            <ShieldCheckIcon className="h-4 w-4" />
             Manage email, password &amp; security
           </Button>
           <Button
+            icon={<SignOutIcon/>}
             variant="outline"
             className="w-full justify-start gap-2 text-destructive hover:text-destructive"
             onClick={() => clerk.signOut()}
           >
-            <SignOutIcon className="h-4 w-4" />
+
             Sign out
           </Button>
         </div>

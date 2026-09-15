@@ -8,10 +8,8 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuItem,
+
 } from "@/components/ui/dropdown-menu";
 import { ServerSettingsDialog } from "@/components/server-settings/server-settings-dialog";
 import { UserAvatar } from "@/components/user-avatar";
@@ -75,27 +73,28 @@ export function ServerSidebar({ serverId }: { serverId: Id<"servers"> }) {
   return (
     <div className="flex h-full w-60 shrink-0 flex-col border-r bg-sidebar">
       <DropdownMenu>
-        <DropdownMenuTrigger
+        <DropdownMenu.Trigger
           render={
             <button className="flex h-12 shrink-0 items-center justify-between border-b px-4 font-semibold shadow-sm hover:bg-accent/50" />
           }
         >
           <span className="truncate">{server.name}</span>
           <CaretDownIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-56">
-          <DropdownMenuItem onClick={() => openSettings("invites")}>
-            <UserPlusIcon className="h-4 w-4" /> Invite People
-          </DropdownMenuItem>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Content align="start" className="w-56">
+          <DropdownMenu.Item
+            icon={UserPlusIcon } onClick={() => openSettings("invites")}>
+            Invite People
+          </DropdownMenu.Item>
           {canOpenSettings && (
-            <DropdownMenuItem onClick={() => openSettings("channels")}>
-              <GearIcon className="h-4 w-4" /> Server Settings
+            <DropdownMenuItem icon={GearIcon} onClick={() => openSettings("channels")}>
+              Server Settings
             </DropdownMenuItem>
           )}
           <DropdownMenuItem variant="danger" onClick={handleLeaveOrDelete}>
             {permissions.isOwner ? "Delete Server" : "Leave Server"}
           </DropdownMenuItem>
-        </DropdownMenuContent>
+        </DropdownMenu.Content>
       </DropdownMenu>
 
       <ScrollArea className="flex-1 px-2 py-2">
@@ -109,8 +108,15 @@ export function ServerSidebar({ serverId }: { serverId: Id<"servers"> }) {
                     key={channel._id}
                     serverId={serverId}
                     channel={channel}
-                    active={pathname === `/app/servers/${serverId}/channels/${channel._id}`}
-                    participants={voiceParticipants?.filter((p) => p.channelId === channel._id) ?? []}
+                    active={
+                      pathname ===
+                      `/app/servers/${serverId}/channels/${channel._id}`
+                    }
+                    participants={
+                      voiceParticipants?.filter(
+                        (p) => p.channelId === channel._id,
+                      ) ?? []
+                    }
                   />
                 ))}
             </div>
@@ -131,8 +137,15 @@ export function ServerSidebar({ serverId }: { serverId: Id<"servers"> }) {
                         key={channel._id}
                         serverId={serverId}
                         channel={channel}
-                        participants={voiceParticipants?.filter((p) => p.channelId === channel._id) ?? []}
-                        active={pathname === `/app/servers/${serverId}/channels/${channel._id}`}
+                        participants={
+                          voiceParticipants?.filter(
+                            (p) => p.channelId === channel._id,
+                          ) ?? []
+                        }
+                        active={
+                          pathname ===
+                          `/app/servers/${serverId}/channels/${channel._id}`
+                        }
                       />
                     ))}
                 </div>
@@ -171,7 +184,7 @@ function ChannelLink({
   participants: { userId: Id<"users">; user: { displayName: string; imageUrl: string } | null }[];
 }) {
   const router = useRouter();
-  const { join, activeChannelId, status } = useVoiceCall();
+  const { join, activeChannelId, status, warmToken } = useVoiceCall();
 
   async function handleClick(e: MouseEvent) {
     if (channel.type !== "voice") return;
@@ -191,6 +204,9 @@ function ChannelLink({
         href={`/app/servers/${serverId}/channels/${channel._id}`}
         prefetch={false}
         onClick={handleClick}
+        // Hovering a voice channel fetches (and caches) its participant token
+        // so the click-to-join path skips the server round trip.
+        onMouseEnter={channel.type === "voice" ? () => warmToken(channel._id) : undefined}
         className={cn(
           "flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground",
           active && "bg-accent text-accent-foreground",
