@@ -3,6 +3,7 @@ import { query, mutation, QueryCtx, MutationCtx } from "./_generated/server";
 import { getCurrentUserOrThrow, getOrCreateCurrentUser } from "./users";
 import { Id } from "./_generated/dataModel";
 import { paginationOptsValidator } from "convex/server";
+import { MAX_MESSAGE_LENGTH } from "./chatLimits";
 
 function orderPair(a: Id<"users">, b: Id<"users">): [Id<"users">, Id<"users">] {
   return a < b ? [a, b] : [b, a];
@@ -120,6 +121,9 @@ export const sendMessage = mutation({
     }
     const content = args.content.trim();
     if (!content) throw new Error("Message can't be empty");
+    if (content.length > MAX_MESSAGE_LENGTH) {
+      throw new Error(`Messages can't be longer than ${MAX_MESSAGE_LENGTH} characters`);
+    }
     return await ctx.db.insert("dmMessages", {
       conversationId: args.conversationId,
       authorId: me._id,
@@ -139,6 +143,9 @@ export const editMessage = mutation({
     }
     const content = args.content.trim();
     if (!content) throw new Error("Message can't be empty");
+    if (content.length > MAX_MESSAGE_LENGTH) {
+      throw new Error(`Messages can't be longer than ${MAX_MESSAGE_LENGTH} characters`);
+    }
     await ctx.db.patch(args.messageId, { content, editedAt: Date.now() });
   },
 });

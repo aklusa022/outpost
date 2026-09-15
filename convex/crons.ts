@@ -13,4 +13,14 @@ crons.interval(
   {},
 );
 
+// Attachments whose upload was started but never finalized (tab closed
+// mid-upload, failed validation call, etc.) are deleted from R2 and the
+// table after an hour; see PENDING_TTL_MS in attachments.ts.
+crons.interval(
+  "reap abandoned attachment uploads",
+  { minutes: 30 },
+  internal.attachments.reapAbandoned,
+  {},
+);
+
 export default crons;

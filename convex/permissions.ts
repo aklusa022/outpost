@@ -32,6 +32,21 @@ export const backfillConnectPermission = internalMutation({
   },
 });
 
+/** Same idea as above, for the Attach Files flag: `npx convex run permissions:backfillAttachFilesPermission`. */
+export const backfillAttachFilesPermission = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const roles = await ctx.db.query("roles").collect();
+    for (const role of roles) {
+      if (role.isDefault && (role.permissions & PERMISSIONS.ATTACH_FILES) === 0) {
+        await ctx.db.patch(role._id, {
+          permissions: role.permissions | PERMISSIONS.ATTACH_FILES,
+        });
+      }
+    }
+  },
+});
+
 /**
  * Computes a member's effective permission bitmask within a server:
  * the server owner always has every permission; otherwise it's the

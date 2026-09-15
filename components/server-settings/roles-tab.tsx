@@ -28,9 +28,19 @@ const PERMISSION_OPTIONS: {
     description: "Send messages in text channels.",
   },
   {
+    flag: PERMISSIONS.ATTACH_FILES,
+    label: "Attach Files",
+    description: "Upload images, videos, audio and other files with messages.",
+  },
+  {
     flag: PERMISSIONS.MANAGE_MESSAGES,
     label: "Manage Messages",
     description: "Delete messages sent by other members.",
+  },
+  {
+    flag: PERMISSIONS.CONNECT,
+    label: "Connect",
+    description: "Join voice channels.",
   },
   {
     flag: PERMISSIONS.CREATE_INVITE,

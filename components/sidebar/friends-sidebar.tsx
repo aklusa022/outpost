@@ -24,7 +24,7 @@ export function FriendsSidebar() {
           href="/app/friends"
           prefetch={false}
           className={cn(
-            "flex items-center gap-2 rounded-md px-2 py-2 text-sm font-medium text-kumo-subtle hover:bg-kumo-tint hover:text-kumo-strong",
+            "flex items-center gap-2 rounded-md px-2 py-2 text-[15px] font-medium text-kumo-subtle hover:bg-kumo-tint hover:text-kumo-strong",
             pathname === "/app/friends" && "bg-kumo-tint text-kumo-strong",
           )}
         >
@@ -45,7 +45,7 @@ export function FriendsSidebar() {
                 href={`/app/dm/${c._id}`}
                 prefetch={false}
                 className={cn(
-                  "flex items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-kumo-tint hover:text-kumo-strong",
+                  "flex items-center gap-2 rounded-md px-2 py-2 text-[15px] font-medium hover:bg-kumo-tint hover:text-kumo-strong",
                   pathname === `/app/dm/${c._id}` &&
                     "bg-kumo-tint text-kumo-strong",
                 )}

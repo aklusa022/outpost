@@ -24,9 +24,6 @@ export function ChannelsTab({ serverId }: { serverId: Id<"servers"> }) {
 
   if (!categories || !channels) return null;
 
-  const uncategorized = channels
-    .filter((c) => !c.categoryId)
-    .sort((a, b) => a.position - b.position);
   const sortedCategories = [...categories].sort((a, b) => a.position - b.position);
 
   async function handleDeleteChannel(channelId: Id<"channels">, name: string) {
@@ -64,27 +61,12 @@ export function ChannelsTab({ serverId }: { serverId: Id<"servers"> }) {
         {canManage && (
           <div className="flex items-center gap-2">
             <CreateCategoryDialog serverId={serverId} />
-            <CreateChannelDialog serverId={serverId} />
+            <CreateChannelDialog serverId={serverId} categories={sortedCategories} />
           </div>
         )}
-
-        {uncategorized.length > 0 && (
-          <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase text-kumo-subtle">
-              No category
-            </p>
-            {uncategorized.map((channel) => (
-              <ChannelRow
-                key={channel._id}
-                name={channel.name}
-                type={channel.type}
-                disabled={pending === channel._id}
-                canManage={canManage}
-                onDelete={() => handleDeleteChannel(channel._id, channel.name)}
-              />
-            ))}
-          </div>
-        )}
+        <p className="text-xs text-kumo-subtle">
+          Tip: drag channels and categories in the sidebar to reorder them.
+        </p>
 
         {sortedCategories.map((category) => (
           <div key={category._id} className="space-y-1">
@@ -95,14 +77,24 @@ export function ChannelsTab({ serverId }: { serverId: Id<"servers"> }) {
               </p>
               {canManage && (
                 <div className="flex items-center gap-1">
-                  <CreateChannelDialog serverId={serverId} categoryId={category._id} compact />
+                  <CreateChannelDialog
+                    serverId={serverId}
+                    categories={sortedCategories}
+                    defaultCategoryId={category._id}
+                    compact
+                  />
                   <Button
                     size="icon"
                     variant="ghost"
                     className="h-6 w-6 text-kumo-danger hover:text-kumo-danger"
-                    disabled={pending === category._id}
+                    disabled={pending === category._id || sortedCategories.length <= 1}
                     onClick={() => handleDeleteCategory(category._id, category.name)}
                     aria-label={`Delete ${category.name} category`}
+                    title={
+                      sortedCategories.length <= 1
+                        ? "A server needs at least one category"
+                        : `Delete ${category.name}`
+                    }
                   >
                     <TrashIcon className="h-3.5 w-3.5" />
                   </Button>
@@ -125,9 +117,9 @@ export function ChannelsTab({ serverId }: { serverId: Id<"servers"> }) {
           </div>
         ))}
 
-        {sortedCategories.length === 0 && uncategorized.length === 0 && (
+        {sortedCategories.length === 0 && (
           <p className="text-sm text-kumo-subtle">
-            No categories or channels yet — create one above.
+            No categories yet — create one above, then add channels to it.
           </p>
         )}
       </div>

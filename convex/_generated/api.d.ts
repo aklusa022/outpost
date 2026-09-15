@@ -8,9 +8,12 @@
  * @module
  */
 
+import type * as attachments from "../attachments.js";
 import type * as categories from "../categories.js";
+import type * as channelCascade from "../channelCascade.js";
 import type * as channelPermissions from "../channelPermissions.js";
 import type * as channels from "../channels.js";
+import type * as chatLimits from "../chatLimits.js";
 import type * as crons from "../crons.js";
 import type * as dms from "../dms.js";
 import type * as friends from "../friends.js";
@@ -20,6 +23,7 @@ import type * as messages from "../messages.js";
 import type * as permissionFlags from "../permissionFlags.js";
 import type * as permissions from "../permissions.js";
 import type * as presence from "../presence.js";
+import type * as r2 from "../r2.js";
 import type * as roles from "../roles.js";
 import type * as servers from "../servers.js";
 import type * as users from "../users.js";
@@ -33,9 +37,12 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  attachments: typeof attachments;
   categories: typeof categories;
+  channelCascade: typeof channelCascade;
   channelPermissions: typeof channelPermissions;
   channels: typeof channels;
+  chatLimits: typeof chatLimits;
   crons: typeof crons;
   dms: typeof dms;
   friends: typeof friends;
@@ -45,6 +52,7 @@ declare const fullApi: ApiFromModules<{
   permissionFlags: typeof permissionFlags;
   permissions: typeof permissions;
   presence: typeof presence;
+  r2: typeof r2;
   roles: typeof roles;
   servers: typeof servers;
   users: typeof users;
@@ -80,4 +88,5 @@ export declare const internal: FilterApi<
 
 export declare const components: {
   presence: import("@convex-dev/presence/_generated/component.js").ComponentApi<"presence">;
+  r2: import("@convex-dev/r2/_generated/component.js").ComponentApi<"r2">;
 };

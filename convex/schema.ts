@@ -87,21 +87,27 @@ export default defineSchema({
     .index("by_server_and_user", ["serverId", "userId"])
     .index("by_role", ["roleId"]),
 
+  // `position` is 0..n within the server (see `reorderCategory`).
   categories: defineTable({
     serverId: v.id("servers"),
     name: v.string(),
     position: v.number(),
-  }).index("by_server", ["serverId"]),
+  })
+    .index("by_server", ["serverId"])
+    .index("by_server_and_position", ["serverId", "position"]),
 
+  // Every channel belongs to a category; `position` is 0..n *within* that
+  // category (renumbered by `moveChannel`).
   channels: defineTable({
     serverId: v.id("servers"),
-    categoryId: v.optional(v.id("categories")),
+    categoryId: v.id("categories"),
     name: v.string(),
     position: v.number(),
     type: v.union(v.literal("text"), v.literal("voice")),
   })
     .index("by_server", ["serverId"])
-    .index("by_category", ["categoryId"]),
+    .index("by_category", ["categoryId"])
+    .index("by_category_and_position", ["categoryId", "position"]),
 
   // The persistent RealtimeKit *meeting* backing a voice channel, created
   // lazily on the first join and reused forever after. A RealtimeKit meeting
@@ -207,6 +213,36 @@ export default defineSchema({
       searchField: "content",
       filterFields: ["channelId"],
     }),
+
+  // Files uploaded to R2 for channel messages. A row is inserted as
+  // "pending" when the presigned PUT URL is handed out, flipped to "ready"
+  // by `attachments.finalizeUpload` once the object has been verified
+  // (size/type via HEAD), and linked to a message by `messages.sendMessage`.
+  // Pending rows that never get finalized are reaped by a cron.
+  attachments: defineTable({
+    channelId: v.id("channels"),
+    serverId: v.id("servers"),
+    uploaderId: v.id("users"),
+    messageId: v.optional(v.id("messages")),
+    // R2 object key (random UUID); the bucket comes from the deployment env.
+    key: v.string(),
+    name: v.string(),
+    contentType: v.string(),
+    size: v.number(),
+    kind: v.union(
+      v.literal("image"),
+      v.literal("video"),
+      v.literal("audio"),
+      v.literal("text"),
+      v.literal("file"),
+    ),
+    status: v.union(v.literal("pending"), v.literal("ready")),
+    // First TEXT_PREVIEW_MAX_CHARS characters of a `.txt` upload.
+    textPreview: v.optional(v.string()),
+  })
+    .index("by_message", ["messageId"])
+    .index("by_channel", ["channelId"])
+    .index("by_status", ["status"]),
 
   invites: defineTable({
     serverId: v.id("servers"),

@@ -7,6 +7,7 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { useServerPermissions } from "@/hooks/use-server-permissions";
+import { useAttachmentUploads } from "@/hooks/use-attachment-uploads";
 import { PERMISSIONS } from "@/convex/permissionFlags";
 import { ChatPanel } from "@/components/chat/chat-panel";
 import { VoiceChannelView } from "@/components/voice/voice-channel-view";
@@ -37,54 +38,71 @@ export default function ChannelPage({
     }
   }, [channelMissing, router, sId]);
 
+  const isVoice = channel?.type === "voice";
   const { results, status, loadMore } = usePaginatedQuery(
     api.messages.listMessages,
-    channelMissing || channel?.type === "voice" ? "skip" : { channelId: cId },
+    channelMissing || isVoice ? "skip" : { channelId: cId },
     { initialNumItems: 30 },
   );
   const sendMessage = useMutation(api.messages.sendMessage);
   const editMessage = useMutation(api.messages.editMessage);
   const deleteMessage = useMutation(api.messages.deleteMessage);
+  const uploader = useAttachmentUploads(cId);
   const [rightPanel, setRightPanel] = useState<"members" | "search" | null>("members");
 
   if (!user || channelMissing) return null;
 
-  if (channel?.type === "voice") {
-    return <VoiceChannelView serverId={sId} channelId={cId} channelName={channel.name} />;
-  }
+  // Voice channels have no messages to search, so only the member list applies.
+  const panel = isVoice && rightPanel === "search" ? null : rightPanel;
+  const header = (
+    <ChannelHeader
+      channelName={channel?.name ?? "channel"}
+      channelType={isVoice ? "voice" : "text"}
+      rightPanel={panel}
+      onToggle={(mode) => setRightPanel((prev) => (prev === mode ? null : mode))}
+    />
+  );
 
   return (
     <div className="flex h-full min-w-0 flex-1">
       <div className="flex min-w-0 flex-1 flex-col">
-        <ChatPanel
-          header={
-            <ChannelHeader
-              channelName={channel?.name ?? "channel"}
-              rightPanel={rightPanel}
-              onToggle={(mode) =>
-                setRightPanel((prev) => (prev === mode ? null : mode))
-              }
-            />
-          }
-          messages={results}
-          hasMore={status === "CanLoadMore"}
-          isLoadingMore={status === "LoadingMore"}
-          onLoadMore={() => loadMore(30)}
-          currentUserId={user._id}
-          canManageMessages={permissions.can(PERMISSIONS.MANAGE_MESSAGES)}
-          onSend={(content) => sendMessage({ channelId: cId, content })}
-          onEdit={(messageId, content) =>
-            editMessage({ messageId: messageId as Id<"messages">, content })
-          }
-          onDelete={(messageId) =>
-            deleteMessage({ messageId: messageId as Id<"messages"> })
-          }
-          placeholder={channel ? `Message #${channel.name}` : "Message…"}
-        />
+        {isVoice ? (
+          <>
+            {header}
+            <div className="min-h-0 flex-1">
+              <VoiceChannelView serverId={sId} channelId={cId} channelName={channel.name} />
+            </div>
+          </>
+        ) : (
+          <ChatPanel
+            header={header}
+            messages={results}
+            hasMore={status === "CanLoadMore"}
+            isLoadingMore={status === "LoadingMore"}
+            onLoadMore={() => loadMore(30)}
+            currentUserId={user._id}
+            canManageMessages={permissions.can(PERMISSIONS.MANAGE_MESSAGES)}
+            uploader={permissions.can(PERMISSIONS.ATTACH_FILES) ? uploader : undefined}
+            onSend={(content, attachmentIds) =>
+              sendMessage({
+                channelId: cId,
+                content,
+                attachmentIds: attachmentIds as Id<"attachments">[],
+              })
+            }
+            onEdit={(messageId, content) =>
+              editMessage({ messageId: messageId as Id<"messages">, content })
+            }
+            onDelete={(messageId) =>
+              deleteMessage({ messageId: messageId as Id<"messages"> })
+            }
+            placeholder={channel ? `Message #${channel.name}` : "Message…"}
+          />
+        )}
       </div>
-      {rightPanel && (
+      {panel && (
         <ChannelSidePanel
-          mode={rightPanel}
+          mode={panel}
           serverId={sId}
           channelId={cId}
           className="w-60 shrink-0"

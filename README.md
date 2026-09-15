@@ -45,12 +45,21 @@ See `wrangler.jsonc` (top-level config vs. the `env.dev` block) and `package.jso
 `build:vinext`/`deploy:vinext` (prod) vs. `build:vinext:dev`/`deploy:vinext:dev` (dev)
 scripts.
 
+Deploys are run from a checkout (`bun run build:vinext && bun run deploy:vinext`, plus
+`bunx convex deploy`). `.github/workflows/production-deployment.yml` then records each
+push to `main` as a GitHub **production** deployment, which is what puts the
+"Deployments → production → View deployment" link in the repo sidebar. The link's URL
+comes from the `PRODUCTION_URL` repository variable (defaults to `https://outpost.zenfora.io`).
+
 ## Features
 
 - User registration & sign-in (Clerk)
 - Friend requests (by exact username) + 1:1 direct messages
 - Server creation, invite-code joining
-- Categories, text channels, and voice channels (Cloudflare RealtimeKit)
+- Categories, text channels, and voice channels (Cloudflare RealtimeKit), with
+  drag-and-drop reordering
+- File attachments on channel messages, stored in Cloudflare R2 (images, video, audio,
+  text previews, generic files)
 - Custom per-server roles with a permission bitmask (view/send/manage channels,
   manage roles, manage server, kick/ban members, manage messages, administrator),
   including a non-deletable `@everyone` default role and role-hierarchy enforcement
@@ -95,6 +104,43 @@ Note: even without the webhook configured, the app still works — `convex/users
 lazily creates a user's Convex profile the first time they load `/app` or send a
 message, as a race-safety fallback. The webhook just means a friend can find you by
 username before you've ever opened the app.
+
+## Attachments (Cloudflare R2)
+
+Message attachments are uploaded straight from the browser to an R2 bucket through the
+[`@convex-dev/r2`](https://www.convex.dev/components/cloudflare-r2) component
+(`convex/attachments.ts`). Each Convex deployment points at its own bucket, and nothing
+about the bucket or its domain lives in code — it's all deployment env vars, so any of it
+can change later with a single `convex env set`.
+
+1. Create a bucket per environment (`bunx wrangler r2 bucket create <name>`) and give it a
+   CORS rule allowing `GET`, `PUT` and `HEAD` with the `Content-Type` header from the
+   app's origins (`bunx wrangler r2 bucket cors set <name> --file cors.json`).
+2. Create an R2 API token (R2 → **Manage R2 API Tokens**, Object Read & Write, scoped to
+   the bucket(s)).
+3. Set on the Convex deployment (`--prod` for production):
+
+   ```bash
+   npx convex env set R2_BUCKET <bucket-name>
+   npx convex env set R2_ENDPOINT https://<account-id>.r2.cloudflarestorage.com
+   npx convex env set R2_ACCESS_KEY_ID <access-key-id>
+   npx convex env set R2_SECRET_ACCESS_KEY <secret-access-key>
+   ```
+
+4. Optional, recommended for prod: connect a custom domain to the bucket (R2 → bucket →
+   **Settings** → Custom Domains) and set it as the bucket's public origin:
+
+   ```bash
+   npx convex env set R2_PUBLIC_URL https://<your-cdn-domain> --prod
+   ```
+
+   With `R2_PUBLIC_URL` set, files are viewed and downloaded through that domain as plain,
+   cacheable URLs (object keys are random UUIDs). Without it, the app falls back to
+   hourly presigned S3 URLs, which is fine for dev. To move the CDN to a new domain,
+   connect the new domain to the bucket and update this one variable.
+
+Limits (`convex/chatLimits.ts`): 10 MB per file, 10 files per message, 2000-character
+messages; `html`/`svg`/`js` uploads are refused since the bucket is served publicly.
 
 ## Testing
 

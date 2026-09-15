@@ -10,6 +10,7 @@ import {
   requirePermission,
 } from "./permissions";
 import { Id } from "./_generated/dataModel";
+import { deleteChannelCascade } from "./channelCascade";
 
 export const createServer = mutation({
   args: { name: v.string() },
@@ -33,17 +34,29 @@ export const createServer = mutation({
       serverId,
       userId: me._id,
     });
-    const categoryId = await ctx.db.insert("categories", {
+    const textCategoryId = await ctx.db.insert("categories", {
       serverId,
       name: "Text Channels",
       position: 0,
     });
     await ctx.db.insert("channels", {
       serverId,
-      categoryId,
+      categoryId: textCategoryId,
       name: "general",
       position: 0,
       type: "text",
+    });
+    const voiceCategoryId = await ctx.db.insert("categories", {
+      serverId,
+      name: "Voice Channels",
+      position: 1,
+    });
+    await ctx.db.insert("channels", {
+      serverId,
+      categoryId: voiceCategoryId,
+      name: "general",
+      position: 0,
+      type: "voice",
     });
     return serverId;
   },
@@ -156,14 +169,7 @@ export const deleteServer = mutation({
       .query("channels")
       .withIndex("by_server", (q) => q.eq("serverId", args.serverId))
       .collect();
-    for (const channel of channels) {
-      const messages = await ctx.db
-        .query("messages")
-        .withIndex("by_channel", (q) => q.eq("channelId", channel._id))
-        .collect();
-      for (const message of messages) await ctx.db.delete(message._id);
-      await ctx.db.delete(channel._id);
-    }
+    for (const channel of channels) await deleteChannelCascade(ctx, channel);
 
     await ctx.db.delete(args.serverId);
   },

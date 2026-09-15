@@ -1,0 +1,80 @@
+# Records a GitHub "production" deployment for every commit on main so the
+# repo's sidebar shows a Deployments box with a "View deployment" button that
+# opens the live site.
+#
+# This does NOT build or deploy anything — production is deployed with
+# `bun run deploy:vinext` (Worker) and `bunx convex deploy` (backend). It
+# checks that the site is up and then tells GitHub which commit is live and
+# where. The URL comes from the `PRODUCTION_URL` repository variable
+# (Settings -> Secrets and variables -> Actions -> Variables) and falls back
+# to the current prod origin, so it can be changed without touching this file.
+name: Production deployment
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  deployments: write
+
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
+
+jobs:
+  record:
+    name: Record production deployment
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      PRODUCTION_URL: ${{ vars.PRODUCTION_URL || 'https://outpost.zenfora.io' }}
+    steps:
+      - name: Check the site is up
+        run: |
+          for attempt in 1 2 3 4 5; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$PRODUCTION_URL")
+            echo "attempt $attempt: HTTP $code"
+            if [ "$code" -ge 200 ] && [ "$code" -lt 400 ]; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::$PRODUCTION_URL is not responding"
+          exit 1
+
+      - name: Register the deployment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const environment_url = process.env.PRODUCTION_URL;
+            const { data: deployment } = await github.rest.repos.createDeployment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: context.sha,
+              environment: "production",
+              description: `Production at ${environment_url}`,
+              auto_merge: false,
+              required_contexts: [],
+              production_environment: true,
+              transient_environment: false,
+            });
+            if (!("id" in deployment)) {
+              core.setFailed(`GitHub did not create a deployment: ${JSON.stringify(deployment)}`);
+              return;
+            }
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: deployment.id,
+              state: "success",
+              environment_url,
+              log_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              description: "Live",
+              auto_inactive: true,
+            });
+            core.summary
+              .addHeading("Production deployment recorded")
+              .addLink(environment_url, environment_url)
+              .write();

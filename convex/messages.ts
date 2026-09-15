@@ -1,6 +1,7 @@
 import { v } from "convex/values";
-import { query, mutation } from "./_generated/server";
+import { query, mutation, QueryCtx } from "./_generated/server";
 import { paginationOptsValidator } from "convex/server";
+import { Doc, Id } from "./_generated/dataModel";
 import { getCurrentUserOrThrow, getOrCreateCurrentUser } from "./users";
 import {
   PERMISSIONS,
@@ -9,6 +10,20 @@ import {
   requireMembership,
   requireChannelPermission,
 } from "./permissions";
+import { deleteAttachmentsForMessage, withUrls } from "./attachments";
+import { MAX_ATTACHMENTS_PER_MESSAGE, MAX_MESSAGE_LENGTH } from "./chatLimits";
+
+async function hydrate(ctx: QueryCtx, m: Doc<"messages">) {
+  const rows = await ctx.db
+    .query("attachments")
+    .withIndex("by_message", (q) => q.eq("messageId", m._id))
+    .collect();
+  return {
+    ...m,
+    author: await ctx.db.get(m.authorId),
+    attachments: await withUrls(rows.filter((r) => r.status === "ready")),
+  };
+}
 
 export const listMessages = query({
   args: {
@@ -19,23 +34,13 @@ export const listMessages = query({
     const me = await getCurrentUserOrThrow(ctx);
     const channel = await ctx.db.get(args.channelId);
     if (!channel) throw new Error("Channel not found");
-    await requireChannelPermission(
-      ctx,
-      args.channelId,
-      me._id,
-      PERMISSIONS.VIEW_CHANNELS,
-    );
+    await requireChannelPermission(ctx, args.channelId, me._id, PERMISSIONS.VIEW_CHANNELS);
     const results = await ctx.db
       .query("messages")
       .withIndex("by_channel", (q) => q.eq("channelId", args.channelId))
       .order("desc")
       .paginate(args.paginationOpts);
-    const page = await Promise.all(
-      results.page.map(async (m) => ({
-        ...m,
-        author: await ctx.db.get(m.authorId),
-      })),
-    );
+    const page = await Promise.all(results.page.map((m) => hydrate(ctx, m)));
     return { ...results, page };
   },
 });
@@ -46,12 +51,7 @@ export const searchMessages = query({
     const me = await getCurrentUserOrThrow(ctx);
     const channel = await ctx.db.get(args.channelId);
     if (!channel) throw new Error("Channel not found");
-    await requireChannelPermission(
-      ctx,
-      args.channelId,
-      me._id,
-      PERMISSIONS.VIEW_CHANNELS,
-    );
+    await requireChannelPermission(ctx, args.channelId, me._id, PERMISSIONS.VIEW_CHANNELS);
     const query = args.query.trim();
     if (!query) return [];
     const results = await ctx.db
@@ -60,34 +60,58 @@ export const searchMessages = query({
         q.search("content", query).eq("channelId", args.channelId),
       )
       .take(25);
-    return await Promise.all(
-      results.map(async (m) => ({
-        ...m,
-        author: await ctx.db.get(m.authorId),
-      })),
-    );
+    return await Promise.all(results.map((m) => hydrate(ctx, m)));
   },
 });
 
 export const sendMessage = mutation({
-  args: { channelId: v.id("channels"), content: v.string() },
+  args: {
+    channelId: v.id("channels"),
+    content: v.string(),
+    attachmentIds: v.optional(v.array(v.id("attachments"))),
+  },
   handler: async (ctx, args) => {
     const me = await getOrCreateCurrentUser(ctx);
     const channel = await ctx.db.get(args.channelId);
     if (!channel) throw new Error("Channel not found");
-    await requireChannelPermission(
-      ctx,
-      args.channelId,
-      me._id,
-      PERMISSIONS.SEND_MESSAGES,
-    );
+    await requireChannelPermission(ctx, args.channelId, me._id, PERMISSIONS.SEND_MESSAGES);
     const content = args.content.trim();
-    if (!content) throw new Error("Message can't be empty");
-    return await ctx.db.insert("messages", {
+    if (content.length > MAX_MESSAGE_LENGTH) {
+      throw new Error(`Messages can't be longer than ${MAX_MESSAGE_LENGTH} characters`);
+    }
+    const attachmentIds = [...new Set(args.attachmentIds ?? [])];
+    if (attachmentIds.length > MAX_ATTACHMENTS_PER_MESSAGE) {
+      throw new Error(`You can attach up to ${MAX_ATTACHMENTS_PER_MESSAGE} files`);
+    }
+    if (!content && attachmentIds.length === 0) throw new Error("Message can't be empty");
+
+    // Every attachment must be this user's finished upload for this channel
+    // and not already on another message.
+    const attachments: Doc<"attachments">[] = [];
+    for (const id of attachmentIds) {
+      const row = await ctx.db.get(id);
+      if (
+        !row ||
+        row.uploaderId !== me._id ||
+        row.channelId !== args.channelId ||
+        row.status !== "ready" ||
+        row.messageId
+      ) {
+        throw new Error("One of the attachments is missing or still uploading");
+      }
+      attachments.push(row);
+    }
+    if (attachments.length > 0) {
+      await requireChannelPermission(ctx, args.channelId, me._id, PERMISSIONS.ATTACH_FILES);
+    }
+
+    const messageId: Id<"messages"> = await ctx.db.insert("messages", {
       channelId: args.channelId,
       authorId: me._id,
       content,
     });
+    for (const row of attachments) await ctx.db.patch(row._id, { messageId });
+    return messageId;
   },
 });
 
@@ -101,7 +125,16 @@ export const editMessage = mutation({
       throw new Error("You can only edit your own messages");
     }
     const content = args.content.trim();
-    if (!content) throw new Error("Message can't be empty");
+    if (content.length > MAX_MESSAGE_LENGTH) {
+      throw new Error(`Messages can't be longer than ${MAX_MESSAGE_LENGTH} characters`);
+    }
+    if (!content) {
+      const attached = await ctx.db
+        .query("attachments")
+        .withIndex("by_message", (q) => q.eq("messageId", args.messageId))
+        .first();
+      if (!attached) throw new Error("Message can't be empty");
+    }
     await ctx.db.patch(args.messageId, { content, editedAt: Date.now() });
   },
 });
@@ -117,17 +150,14 @@ export const deleteMessage = mutation({
 
     if (message.authorId !== me._id) {
       await requireMembership(ctx, channel.serverId, me._id);
-      const bitmask = await getEffectivePermissions(
-        ctx,
-        channel.serverId,
-        me._id,
-      );
+      const bitmask = await getEffectivePermissions(ctx, channel.serverId, me._id);
       if (!hasPermission(bitmask, PERMISSIONS.MANAGE_MESSAGES)) {
         throw new Error(
           "You can only delete your own messages, unless you have Manage Messages",
         );
       }
     }
+    await deleteAttachmentsForMessage(ctx, args.messageId);
     await ctx.db.delete(args.messageId);
   },
 });

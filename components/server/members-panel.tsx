@@ -91,7 +91,7 @@ function MemberSection({
               )}
             />
           </div>
-          <span className="truncate text-sm font-medium">{member.user.displayName}</span>
+          <span className="truncate text-[15px] font-medium">{member.user.displayName}</span>
         </div>
       ))}
     </div>

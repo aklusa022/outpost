@@ -6,6 +6,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Input } from "@cloudflare/kumo";
 import { UserAvatar } from "@/components/user-avatar";
+import { Composer } from "@/components/chat/composer";
+import { AttachmentCard, type Attachment } from "@/components/chat/attachment-card";
+import type { AttachmentUploader } from "@/hooks/use-attachment-uploads";
+import { MAX_MESSAGE_LENGTH } from "@/convex/chatLimits";
 import { PencilIcon, TrashIcon } from "@phosphor-icons/react";
 
 export type ChatMessage = {
@@ -15,6 +19,7 @@ export type ChatMessage = {
   _creationTime: number;
   authorId: string;
   author: { _id: string; displayName: string; imageUrl: string } | null;
+  attachments?: Attachment[];
 };
 
 export function ChatPanel({
@@ -29,6 +34,7 @@ export function ChatPanel({
   onEdit,
   onDelete,
   placeholder,
+  uploader,
 }: {
   header: ReactNode;
   messages: ChatMessage[];
@@ -37,21 +43,33 @@ export function ChatPanel({
   onLoadMore: () => void;
   currentUserId: string;
   canManageMessages?: boolean;
-  onSend: (content: string) => Promise<unknown>;
+  onSend: (content: string, attachmentIds: string[]) => Promise<unknown>;
   onEdit: (messageId: string, content: string) => Promise<unknown>;
   onDelete: (messageId: string) => Promise<unknown>;
   placeholder?: string;
+  /** Enables file attachments in the composer (server channels with Attach Files). */
+  uploader?: AttachmentUploader;
 }) {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
 
   async function handleSend() {
     const content = draft.trim();
-    if (!content) return;
+    const attachmentIds = uploader?.readyIds ?? [];
+    if (!content && attachmentIds.length === 0) return;
+    if (uploader?.busy) {
+      toast.info("Wait for your files to finish uploading");
+      return;
+    }
+    if (content.length > MAX_MESSAGE_LENGTH) {
+      toast.error(`Messages can't be longer than ${MAX_MESSAGE_LENGTH} characters`);
+      return;
+    }
     setSending(true);
     setDraft("");
     try {
-      await onSend(content);
+      await onSend(content, attachmentIds);
+      uploader?.clear();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to send message");
       setDraft(content);
@@ -118,18 +136,13 @@ export function ChatPanel({
         </div>
       </ScrollArea>
       <div className="p-4 pt-0">
-        <Input
+        <Composer
           value={draft}
+          onChange={setDraft}
+          onSubmit={() => void handleSend()}
           disabled={sending}
           placeholder={placeholder ?? "Message…"}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              void handleSend();
-            }
-          }}
-          className="h-11 w-full rounded-lg"
+          uploader={uploader}
         />
       </div>
     </div>
@@ -153,10 +166,11 @@ function MessageRow({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(message.content);
+  const attachments = message.attachments ?? [];
 
   async function saveEdit() {
     const content = draft.trim();
-    if (!content) return;
+    if (!content && attachments.length === 0) return;
     try {
       await onEdit(content);
       setEditing(false);
@@ -180,7 +194,7 @@ function MessageRow({
       <div className="min-w-0 flex-1">
         {!grouped && (
           <div className="flex items-baseline gap-2">
-            <span className="text-sm font-semibold">
+            <span className="text-[15px] font-semibold">
               {message.author?.displayName ?? "Unknown user"}
             </span>
             <span className="text-xs text-kumo-subtle">
@@ -193,6 +207,7 @@ function MessageRow({
             <Input
               autoFocus
               value={draft}
+              maxLength={MAX_MESSAGE_LENGTH}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") void saveEdit();
@@ -208,14 +223,23 @@ function MessageRow({
             </Button>
           </div>
         ) : (
-          <p className="whitespace-pre-wrap break-words text-sm">
-            {message.content}
-            {message.editedAt && (
-              <span className="ml-1 text-[10px] text-kumo-subtle">
-                (edited)
-              </span>
-            )}
-          </p>
+          message.content && (
+            <p className="whitespace-pre-wrap break-words text-[15px] leading-[1.375rem]">
+              {message.content}
+              {message.editedAt && (
+                <span className="ml-1 text-[10px] text-kumo-subtle">
+                  (edited)
+                </span>
+              )}
+            </p>
+          )
+        )}
+        {attachments.length > 0 && (
+          <div className="mt-1.5 flex flex-col gap-2">
+            {attachments.map((a) => (
+              <AttachmentCard key={a._id} attachment={a} />
+            ))}
+          </div>
         )}
       </div>
       {!editing && (canEdit || canDelete) && (

@@ -23,6 +23,15 @@ async function createUser(t: ReturnType<typeof convexTest>, subject: string, nam
   return { as: user, doc };
 }
 
+/** Channels must live in a category; new servers seed "Text Channels" first. */
+async function firstCategoryId(
+  owner: Awaited<ReturnType<typeof createUser>>,
+  serverId: Id<"servers">,
+) {
+  const categories = await owner.as.query(api.categories.listCategories, { serverId });
+  return categories[0]._id;
+}
+
 async function joinServer(
   owner: Awaited<ReturnType<typeof createUser>>,
   member: Awaited<ReturnType<typeof createUser>>,
@@ -41,6 +50,7 @@ test("creating a channel with type voice produces a voice channel", async () => 
 
   const channelId = await owner.as.mutation(api.channels.createChannel, {
     serverId,
+    categoryId: await firstCategoryId(owner, serverId),
     name: "General Voice",
     type: "voice",
   });
@@ -58,6 +68,7 @@ test("a member without CONNECT (denied via channel override) is rejected by asse
 
   const channelId = await owner.as.mutation(api.channels.createChannel, {
     serverId,
+    categoryId: await firstCategoryId(owner, serverId),
     name: "General Voice",
     type: "voice",
   });
@@ -87,6 +98,7 @@ test("assertCanJoin returns a fresh cached token and rejects stale ones", async 
   const serverId = await owner.as.mutation(api.servers.createServer, { name: "Test Server" });
   const channelId = await owner.as.mutation(api.channels.createChannel, {
     serverId,
+    categoryId: await firstCategoryId(owner, serverId),
     name: "voice",
     type: "voice",
   });
@@ -136,6 +148,7 @@ test("myVoiceTokens hides tokens for channels the user can no longer CONNECT to"
   await joinServer(owner, member, serverId);
   const channelId = await owner.as.mutation(api.channels.createChannel, {
     serverId,
+    categoryId: await firstCategoryId(owner, serverId),
     name: "voice",
     type: "voice",
   });
@@ -181,6 +194,7 @@ test("markJoined requires CONNECT, records the beacon token, and leaveByBeacon r
   await joinServer(owner, member, serverId);
   const channelId = await owner.as.mutation(api.channels.createChannel, {
     serverId,
+    categoryId: await firstCategoryId(owner, serverId),
     name: "voice",
     type: "voice",
   });
@@ -250,6 +264,7 @@ test("reapStaleVoiceParticipants deletes only rows past the heartbeat cutoff", a
   await joinServer(owner, member, serverId);
   const channelId = await owner.as.mutation(api.channels.createChannel, {
     serverId,
+    categoryId: await firstCategoryId(owner, serverId),
     name: "voice",
     type: "voice",
   });
@@ -282,11 +297,13 @@ test("recordUserJoinedVoiceChannel enforces one call at a time", async () => {
 
   const channelA = await owner.as.mutation(api.channels.createChannel, {
     serverId,
+    categoryId: await firstCategoryId(owner, serverId),
     name: "voice-a",
     type: "voice",
   });
   const channelB = await owner.as.mutation(api.channels.createChannel, {
     serverId,
+    categoryId: await firstCategoryId(owner, serverId),
     name: "voice-b",
     type: "voice",
   });
@@ -322,6 +339,7 @@ test("reconcileParticipantLeft only removes the row for the matching peer id", a
   const serverId = await owner.as.mutation(api.servers.createServer, { name: "Test Server" });
   const channelId = await owner.as.mutation(api.channels.createChannel, {
     serverId,
+    categoryId: await firstCategoryId(owner, serverId),
     name: "voice",
     type: "voice",
   });
@@ -370,6 +388,7 @@ test("reconcileMeetingEnded clears only participants no client is keeping alive"
   await joinServer(owner, member, serverId);
   const channelId = await owner.as.mutation(api.channels.createChannel, {
     serverId,
+    categoryId: await firstCategoryId(owner, serverId),
     name: "voice",
     type: "voice",
   });

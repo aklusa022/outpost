@@ -17,17 +17,60 @@ type RosterEntry = {
   user: { displayName: string; imageUrl: string } | null;
 };
 
-function RosterList({ roster }: { roster: RosterEntry[] }) {
+function RosterTiles({ roster }: { roster: RosterEntry[] }) {
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex max-w-2xl flex-wrap justify-center gap-3">
       {roster.map((p) => (
-        <div key={p.userId} className="flex items-center gap-2 rounded-md bg-kumo-tint/40 px-2 py-1.5">
-          <UserAvatar name={p.user?.displayName ?? "?"} imageUrl={p.user?.imageUrl} />
-          <span className="truncate text-sm">{p.user?.displayName ?? "Unknown"}</span>
+        <div
+          key={p.userId}
+          className="flex w-32 flex-col items-center gap-2 rounded-xl bg-kumo-elevated px-4 py-4 ring ring-kumo-line"
+        >
+          <UserAvatar
+            name={p.user?.displayName ?? "?"}
+            imageUrl={p.user?.imageUrl}
+            className="h-12 w-12"
+          />
+          <span className="w-full truncate text-center text-sm font-medium">
+            {p.user?.displayName ?? "Unknown"}
+          </span>
         </div>
       ))}
     </div>
   );
+}
+
+function CallLobby({
+  channelName,
+  roster,
+  subtitle,
+  action,
+}: {
+  channelName: string;
+  roster: RosterEntry[];
+  subtitle: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="flex h-full min-h-0 flex-col items-center justify-center gap-6 overflow-y-auto p-8">
+      <div className="flex flex-col items-center gap-3">
+        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-kumo-tint">
+          <SpeakerHighIcon className="h-10 w-10 text-kumo-default" weight="fill" />
+        </div>
+        <div className="flex flex-col items-center gap-1">
+          <h2 className="text-xl font-semibold">{channelName}</h2>
+          <p className="text-sm text-kumo-subtle">{subtitle}</p>
+        </div>
+      </div>
+      {roster.length > 0 && <RosterTiles roster={roster} />}
+      {action}
+    </div>
+  );
+}
+
+function describeRoster(count: number) {
+  if (count === 0) return "No one is here yet — be the first to join.";
+  if (count === 1) return "1 person is in the call.";
+  return `${count} people are in the call.`;
 }
 
 export function VoiceChannelView({
@@ -63,20 +106,7 @@ export function VoiceChannelView({
       me && !alreadyListed
         ? [...roster, { userId: me._id, user: { displayName: me.displayName, imageUrl: me.imageUrl } }]
         : roster;
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 p-6">
-        <div className="flex flex-col items-center gap-2">
-          <SpeakerHighIcon className="h-10 w-10 text-kumo-subtle" />
-          <p className="text-lg font-semibold">{channelName}</p>
-          <p className="text-xs text-kumo-subtle">Joining…</p>
-        </div>
-        {joiningRoster.length > 0 && (
-          <div className="flex w-full max-w-64 flex-col items-stretch gap-2">
-            <RosterList roster={joiningRoster} />
-          </div>
-        )}
-      </div>
-    );
+    return <CallLobby channelName={channelName} roster={joiningRoster} subtitle="Joining…" />;
   }
 
   const inAnotherCall = status !== "idle" && activeChannelId !== channelId;
@@ -90,22 +120,15 @@ export function VoiceChannelView({
   }
 
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-4 p-6">
-      <div className="flex flex-col items-center gap-2">
-        <SpeakerHighIcon className="h-10 w-10 text-kumo-subtle" />
-        <p className="text-lg font-semibold">{channelName}</p>
-      </div>
-
-      {roster.length > 0 && (
-        <div className="flex w-full max-w-64 flex-col items-stretch gap-2">
-          <p className="text-center text-xs text-kumo-subtle">In this call</p>
-          <RosterList roster={roster} />
-        </div>
-      )}
-
-      <Button onClick={handleJoin} disabled={status === "connecting"}>
-        {inAnotherCall ? "Switch to This Call" : "Join Call"}
-      </Button>
-    </div>
+    <CallLobby
+      channelName={channelName}
+      roster={roster}
+      subtitle={describeRoster(roster.length)}
+      action={
+        <Button size="lg" onClick={handleJoin} disabled={status === "connecting"}>
+          {inAnotherCall ? "Switch to This Call" : "Join Call"}
+        </Button>
+      }
+    />
   );
 }

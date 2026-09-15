@@ -16,6 +16,7 @@ export const PERMISSIONS = {
   BAN_MEMBERS: 1 << 8,
   ADMINISTRATOR: 1 << 9,
   CONNECT: 1 << 10,
+  ATTACH_FILES: 1 << 11,
 } as const;
 
 export type PermissionFlag = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -29,7 +30,8 @@ export const DEFAULT_ROLE_PERMISSIONS =
   PERMISSIONS.VIEW_CHANNELS |
   PERMISSIONS.SEND_MESSAGES |
   PERMISSIONS.CREATE_INVITE |
-  PERMISSIONS.CONNECT;
+  PERMISSIONS.CONNECT |
+  PERMISSIONS.ATTACH_FILES;
 
 export function hasPermission(bitmask: number, flag: PermissionFlag): boolean {
   return (bitmask & PERMISSIONS.ADMINISTRATOR) !== 0 || (bitmask & flag) !== 0;
