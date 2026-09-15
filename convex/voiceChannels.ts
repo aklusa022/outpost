@@ -391,15 +391,21 @@ export const leaveByBeacon = mutation({
   },
 });
 
+// Periodic liveness ping. The first call after the media join also records
+// the RealtimeKit peer id so webhook reconciliation can match this exact join.
 export const heartbeat = mutation({
-  args: {},
-  handler: async (ctx) => {
+  args: { peerId: v.optional(v.string()) },
+  handler: async (ctx, args) => {
     const me = await getCurrentUserOrThrow(ctx);
     const row = await ctx.db
       .query("voiceParticipants")
       .withIndex("by_user", (q) => q.eq("userId", me._id))
       .unique();
-    if (row) await ctx.db.patch(row._id, { lastSeenAt: Date.now() });
+    if (!row) return;
+    await ctx.db.patch(row._id, {
+      lastSeenAt: Date.now(),
+      ...(args.peerId ? { rtkPeerId: args.peerId } : {}),
+    });
   },
 });
 
@@ -422,27 +428,13 @@ export const reapStaleVoiceParticipants = internalMutation({
   },
 });
 
-// Note: for the joiner's own row, this fires once via `markJoined` and once
-// again here when their own webhook arrives — the upsert treats a repeat for
-// the same channel as a refresh, so nothing is lost.
+// RealtimeKit webhooks are delivered late (seen 6–15 s) and out of order
+// relative to our own mutations, so none of the reconcilers below may create
+// state or delete state they can't prove is theirs. Every join is already
+// recorded by the client's `markJoined` at click time; a stale
+// `participantJoined` arriving after the client left must NOT resurrect the
+// row (that's the "user reappears in the roster for a while" bug).
 export const reconcileParticipantJoined = internalMutation({
-  args: { rtkMeetingId: v.string(), userId: v.id("users") },
-  handler: async (ctx, args) => {
-    const session = await ctx.db
-      .query("voiceChannelSessions")
-      .withIndex("by_rtkMeetingId", (q) => q.eq("rtkMeetingId", args.rtkMeetingId))
-      .unique();
-    if (!session) return; // untracked/expired meeting, ignore
-    await upsertVoiceParticipant(ctx, {
-      channelId: session.channelId,
-      serverId: session.serverId,
-      userId: args.userId,
-      rtkMeetingId: args.rtkMeetingId,
-    });
-  },
-});
-
-export const reconcileParticipantLeft = internalMutation({
   args: { rtkMeetingId: v.string(), userId: v.id("users") },
   handler: async (ctx, args) => {
     const row = await ctx.db
@@ -451,21 +443,45 @@ export const reconcileParticipantLeft = internalMutation({
         q.eq("rtkMeetingId", args.rtkMeetingId).eq("userId", args.userId),
       )
       .unique();
-    if (row) await ctx.db.delete(row._id);
+    if (row) await ctx.db.patch(row._id, { lastSeenAt: Date.now() });
   },
 });
 
+// Only removes the row if it belongs to the very join instance that left
+// (peer ids match). A row without a peer id yet (media join still in flight)
+// or with a newer one (user re-joined) is left alone; the reaper covers the
+// crash case.
+export const reconcileParticipantLeft = internalMutation({
+  args: { rtkMeetingId: v.string(), userId: v.id("users"), peerId: v.string() },
+  handler: async (ctx, args) => {
+    const row = await ctx.db
+      .query("voiceParticipants")
+      .withIndex("by_rtkMeetingId_and_userId", (q) =>
+        q.eq("rtkMeetingId", args.rtkMeetingId).eq("userId", args.userId),
+      )
+      .unique();
+    if (row && row.rtkPeerId === args.peerId) await ctx.db.delete(row._id);
+  },
+});
+
+// One missed 20 s client heartbeat.
+const MEETING_ENDED_STALE_MS = 30_000;
+
 // A RealtimeKit *session* ended (last participant left). The meeting itself
 // persists and is reused for the channel's next call, so the session row is
-// left untouched; only lingering participant rows are cleared.
+// left untouched. Because this can arrive a minute after the fact, only rows
+// no live client is heartbeating are cleared — a quick re-join keeps its row.
 export const reconcileMeetingEnded = internalMutation({
   args: { rtkMeetingId: v.string() },
   handler: async (ctx, args) => {
+    const cutoff = Date.now() - MEETING_ENDED_STALE_MS;
     const rows = await ctx.db
       .query("voiceParticipants")
       .withIndex("by_rtkMeetingId_and_userId", (q) => q.eq("rtkMeetingId", args.rtkMeetingId))
       .collect();
-    for (const row of rows) await ctx.db.delete(row._id);
+    for (const row of rows) {
+      if (row.lastSeenAt < cutoff) await ctx.db.delete(row._id);
+    }
   },
 });
 

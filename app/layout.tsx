@@ -5,7 +5,7 @@ import ConvexClientProvider from "@/components/ConvexClientProvider";
 import { ClerkProvider } from "@clerk/nextjs";
 import { dark } from "@clerk/themes";
 import { TooltipProvider } from "@cloudflare/kumo";
-import { Toaster } from "@/components/ui/sonner";
+import { AppToaster } from "@/components/app-toaster";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -35,7 +35,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark" data-mode="dark">
+    <html lang="en" data-mode="dark">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
@@ -53,8 +53,7 @@ export default function RootLayout({
         >
           <ConvexClientProvider>
             <TooltipProvider delay={200}>
-              {children}
-              <Toaster theme="dark" />
+              <AppToaster>{children}</AppToaster>
             </TooltipProvider>
           </ConvexClientProvider>
         </ClerkProvider>

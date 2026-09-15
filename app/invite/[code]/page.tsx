@@ -4,7 +4,7 @@ import { use, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import { SignInButton, SignUpButton } from "@clerk/nextjs";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 
@@ -41,14 +41,14 @@ export default function InvitePage({
   return (
     <Centered>
       <div className="space-y-1">
-        <p className="text-sm text-muted-foreground">You&apos;ve been invited to join</p>
+        <p className="text-sm text-kumo-subtle">You&apos;ve been invited to join</p>
         <h1 className="text-2xl font-bold">{info.server.name}</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-kumo-subtle">
           {info.memberCount} member{info.memberCount === 1 ? "" : "s"}
         </p>
       </div>
       <AuthLoading>
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <p className="text-sm text-kumo-subtle">Loading…</p>
       </AuthLoading>
       <Authenticated>
         <Button size="lg" disabled={joining} onClick={handleJoin}>
@@ -73,7 +73,7 @@ export default function InvitePage({
 
 function Centered({ children }: { children: React.ReactNode }) {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-6 bg-background px-6 text-center">
+    <main className="flex min-h-screen flex-col items-center justify-center gap-6 bg-kumo-base px-6 text-center">
       {children}
     </main>
   );

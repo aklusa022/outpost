@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { api } from "@/convex/_generated/api";
 import { Id, Doc } from "@/convex/_generated/dataModel";
-import { PERMISSIONS } from "@/convex/permissions";
+import { PERMISSIONS } from "@/convex/permissionFlags";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Checkbox } from "@cloudflare/kumo";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -95,7 +95,7 @@ export function RolesTab({ serverId }: { serverId: Id<"servers"> }) {
     <div className="flex h-full gap-4 p-1">
       <div className="flex w-48 shrink-0 flex-col gap-1">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold uppercase text-muted-foreground">
+          <span className="text-xs font-semibold uppercase text-kumo-subtle">
             Roles
           </span>
           <Button
@@ -117,8 +117,8 @@ export function RolesTab({ serverId }: { serverId: Id<"servers"> }) {
                 <button
                   key={role._id}
                   onClick={() => setSelectedRoleId(role._id)}
-                  className={`rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent ${
-                    selectedRoleId === role._id ? "bg-accent" : ""
+                  className={`rounded-md px-2 py-1.5 text-left text-sm hover:bg-kumo-tint ${
+                    selectedRoleId === role._id ? "bg-kumo-tint" : ""
                   }`}
                 >
                   {role.name}
@@ -132,7 +132,7 @@ export function RolesTab({ serverId }: { serverId: Id<"servers"> }) {
         {selectedRole ? (
           <RoleEditor role={selectedRole} onDeleted={() => setSelectedRoleId(null)} />
         ) : (
-          <p className="p-4 text-sm text-muted-foreground">
+          <p className="p-4 text-sm text-kumo-subtle">
             Select a role on the left, or create a new one.
           </p>
         )}
@@ -202,7 +202,7 @@ function RoleEditor({
           </div>
         </Field>
         <div className="space-y-3">
-          <span className="text-xs font-semibold uppercase text-muted-foreground">
+          <span className="text-xs font-semibold uppercase text-kumo-subtle">
             Permissions
           </span>
           {PERMISSION_OPTIONS.map((option) => (
@@ -218,7 +218,7 @@ function RoleEditor({
               />
               <span>
                 <span className="block text-sm font-medium">{option.label}</span>
-                <span className="block text-xs text-muted-foreground">
+                <span className="block text-xs text-kumo-subtle">
                   {option.description}
                 </span>
               </span>

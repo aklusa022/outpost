@@ -132,6 +132,10 @@ export default defineSchema({
     userId: v.id("users"),
     rtkMeetingId: v.string(),
     rtkParticipantId: v.optional(v.string()),
+    // RealtimeKit peer id of the *current* join instance (set by the client
+    // once the media join completes). Webhooks carry the same id, which lets
+    // a late `participantLeft` for an earlier join be told apart from this one.
+    rtkPeerId: v.optional(v.string()),
     joinedAt: v.number(),
     lastSeenAt: v.number(),
     // Random, client-generated secret for this tab's call. Lets the tab

@@ -15,7 +15,7 @@ export function UserAccountPanel() {
   if (!user) {
     return (
       <div
-        className="h-12 w-12 animate-pulse rounded-2xl bg-secondary"
+        className="h-12 w-12 animate-pulse rounded-2xl bg-kumo-fill"
         aria-hidden
       />
     );
@@ -33,7 +33,7 @@ export function UserAccountPanel() {
         render={
           <button
             onClick={() => setOpen(true)}
-            className="flex h-12 w-12 items-center justify-center rounded-2xl bg-secondary text-muted-foreground transition-all hover:rounded-xl hover:bg-primary hover:text-primary-foreground"
+            className="flex h-12 w-12 items-center justify-center rounded-2xl bg-kumo-fill text-kumo-subtle transition-all hover:rounded-xl hover:bg-kumo-brand hover:text-white"
             aria-label="Account settings"
           />
         }

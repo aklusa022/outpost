@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
@@ -40,7 +40,7 @@ export function InvitesTab({ serverId }: { serverId: Id<"servers"> }) {
       <ScrollArea className="h-[400px]">
         <div className="space-y-2">
           {invites?.length === 0 && (
-            <p className="text-sm text-muted-foreground">No active invites.</p>
+            <p className="text-sm text-kumo-subtle">No active invites.</p>
           )}
           {invites?.map((invite) => (
             <div
@@ -49,7 +49,7 @@ export function InvitesTab({ serverId }: { serverId: Id<"servers"> }) {
             >
               <div>
                 <div className="font-mono text-sm">{invite.code}</div>
-                <div className="text-xs text-muted-foreground">
+                <div className="text-xs text-kumo-subtle">
                   {invite.uses} use{invite.uses === 1 ? "" : "s"}
                   {invite.maxUses ? ` / ${invite.maxUses}` : ""}
                 </div>

@@ -15,7 +15,7 @@ export function FriendsSidebar() {
   const pathname = usePathname();
 
   return (
-    <div className="flex h-full w-60 shrink-0 flex-col border-r bg-sidebar">
+    <div className="flex h-full w-60 shrink-0 flex-col border-r bg-kumo-elevated">
       <div className="flex h-12 items-center border-b px-4 font-semibold shadow-sm">
         Outpost
       </div>
@@ -24,15 +24,15 @@ export function FriendsSidebar() {
           href="/app/friends"
           prefetch={false}
           className={cn(
-            "flex items-center gap-2 rounded-md px-2 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-            pathname === "/app/friends" && "bg-accent text-accent-foreground",
+            "flex items-center gap-2 rounded-md px-2 py-2 text-sm font-medium text-kumo-subtle hover:bg-kumo-tint hover:text-kumo-strong",
+            pathname === "/app/friends" && "bg-kumo-tint text-kumo-strong",
           )}
         >
           <UsersIcon className="h-4 w-4" />
           Friends
         </Link>
       </div>
-      <div className="flex items-center justify-between px-4 pb-1 pt-2 text-xs font-semibold uppercase text-muted-foreground">
+      <div className="flex items-center justify-between px-4 pb-1 pt-2 text-xs font-semibold uppercase text-kumo-subtle">
         Direct Messages
         <AddFriendDialog />
       </div>
@@ -45,9 +45,9 @@ export function FriendsSidebar() {
                 href={`/app/dm/${c._id}`}
                 prefetch={false}
                 className={cn(
-                  "flex items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-accent hover:text-accent-foreground",
+                  "flex items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-kumo-tint hover:text-kumo-strong",
                   pathname === `/app/dm/${c._id}` &&
-                    "bg-accent text-accent-foreground",
+                    "bg-kumo-tint text-kumo-strong",
                 )}
               >
                 <UserAvatar

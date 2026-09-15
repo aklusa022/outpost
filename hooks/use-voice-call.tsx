@@ -277,6 +277,9 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
         ]);
         setStatus("connected");
         statusRef.current = "connected";
+        // Record which RealtimeKit peer this join is, so a late webhook for a
+        // previous join of ours can't be mistaken for this one.
+        void heartbeat({ peerId: client.self.peerId }).catch(() => {});
       } catch (err) {
         client?.leave().catch(() => {});
         leaveVoiceChannel({}).catch(() => {});
@@ -284,7 +287,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
         throw err;
       }
     },
-    [leave, markJoined, discardPrepared, initWithRetry, leaveVoiceChannel, reset],
+    [leave, markJoined, discardPrepared, initWithRetry, leaveVoiceChannel, reset, heartbeat],
   );
 
   // Clears local state if the call ends from outside `leave()` — the stock

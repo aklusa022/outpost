@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery } from "convex/react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
@@ -87,7 +87,7 @@ export default function FriendsPage() {
 
           <Section title={`All friends — ${friends?.length ?? 0}`}>
             {friends?.length === 0 && (
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-kumo-subtle">
                 No friends yet — add one by username above.
               </p>
             )}
@@ -115,7 +115,7 @@ export default function FriendsPage() {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="space-y-2">
-      <h2 className="text-xs font-semibold uppercase text-muted-foreground">
+      <h2 className="text-xs font-semibold uppercase text-kumo-subtle">
         {title}
       </h2>
       <div className="space-y-1">{children}</div>

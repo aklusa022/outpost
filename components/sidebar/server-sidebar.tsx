@@ -3,19 +3,16 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  DropdownMenu, DropdownMenuItem,
-
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenu } from "@/components/ui/dropdown-menu";
 import { ServerSettingsDialog } from "@/components/server-settings/server-settings-dialog";
 import { UserAvatar } from "@/components/user-avatar";
 import { useServerPermissions } from "@/hooks/use-server-permissions";
 import { useVoiceCall } from "@/hooks/use-voice-call";
-import { PERMISSIONS } from "@/convex/permissions";
+import { PERMISSIONS } from "@/convex/permissionFlags";
 import { cn } from "@/lib/utils";
 import {
   CaretDownIcon,
@@ -40,7 +37,7 @@ export function ServerSidebar({ serverId }: { serverId: Id<"servers"> }) {
   const [settingsTab, setSettingsTab] = useState("overview");
 
   if (!server || categories === undefined || channels === undefined) {
-    return <div className="w-60 shrink-0 border-r bg-sidebar" />;
+    return <div className="w-60 shrink-0 border-r bg-kumo-elevated" />;
   }
 
   const uncategorized = channels.filter((c) => !c.categoryId);
@@ -71,29 +68,28 @@ export function ServerSidebar({ serverId }: { serverId: Id<"servers"> }) {
   }
 
   return (
-    <div className="flex h-full w-60 shrink-0 flex-col border-r bg-sidebar">
+    <div className="flex h-full w-60 shrink-0 flex-col border-r bg-kumo-elevated">
       <DropdownMenu>
         <DropdownMenu.Trigger
           render={
-            <button className="flex h-12 shrink-0 items-center justify-between border-b px-4 font-semibold shadow-sm hover:bg-accent/50" />
+            <button className="flex h-12 shrink-0 items-center justify-between border-b px-4 font-semibold shadow-sm hover:bg-kumo-tint/50" />
           }
         >
           <span className="truncate">{server.name}</span>
-          <CaretDownIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <CaretDownIcon className="h-4 w-4 shrink-0 text-kumo-subtle" />
         </DropdownMenu.Trigger>
         <DropdownMenu.Content align="start" className="w-56">
-          <DropdownMenu.Item
-            icon={UserPlusIcon } onClick={() => openSettings("invites")}>
+          <DropdownMenu.Item icon={UserPlusIcon} onClick={() => openSettings("invites")}>
             Invite People
           </DropdownMenu.Item>
           {canOpenSettings && (
-            <DropdownMenuItem icon={GearIcon} onClick={() => openSettings("channels")}>
+            <DropdownMenu.Item icon={GearIcon} onClick={() => openSettings("channels")}>
               Server Settings
-            </DropdownMenuItem>
+            </DropdownMenu.Item>
           )}
-          <DropdownMenuItem variant="danger" onClick={handleLeaveOrDelete}>
+          <DropdownMenu.Item variant="danger" onClick={handleLeaveOrDelete}>
             {permissions.isOwner ? "Delete Server" : "Leave Server"}
-          </DropdownMenuItem>
+          </DropdownMenu.Item>
         </DropdownMenu.Content>
       </DropdownMenu>
 
@@ -125,7 +121,7 @@ export function ServerSidebar({ serverId }: { serverId: Id<"servers"> }) {
             .sort((a, b) => a.position - b.position)
             .map((category) => (
               <div key={category._id}>
-                <div className="px-1 text-xs font-semibold uppercase text-muted-foreground">
+                <div className="px-1 text-xs font-semibold uppercase text-kumo-subtle">
                   <span className="truncate">{category.name}</span>
                 </div>
                 <div className="mt-1 flex flex-col gap-0.5">
@@ -154,7 +150,7 @@ export function ServerSidebar({ serverId }: { serverId: Id<"servers"> }) {
           {canManageChannels && (
             <button
               onClick={() => openSettings("channels")}
-              className="px-1 text-left text-xs font-medium text-muted-foreground hover:text-foreground hover:underline"
+              className="px-1 text-left text-xs font-medium text-kumo-subtle hover:text-kumo-default hover:underline"
             >
               + Add a category or channel
             </button>
@@ -208,8 +204,8 @@ function ChannelLink({
         // so the click-to-join path skips the server round trip.
         onMouseEnter={channel.type === "voice" ? () => warmToken(channel._id) : undefined}
         className={cn(
-          "flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-          active && "bg-accent text-accent-foreground",
+          "flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-kumo-subtle hover:bg-kumo-tint hover:text-kumo-strong",
+          active && "bg-kumo-tint text-kumo-strong",
         )}
       >
         {channel.type === "voice" ? (
@@ -228,7 +224,7 @@ function ChannelLink({
                 imageUrl={p.user?.imageUrl}
                 className="h-5 w-5"
               />
-              <span className="truncate text-xs text-muted-foreground">
+              <span className="truncate text-xs text-kumo-subtle">
                 {p.user?.displayName ?? "Unknown"}
               </span>
             </div>

@@ -7,7 +7,7 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { useServerPermissions } from "@/hooks/use-server-permissions";
-import { PERMISSIONS } from "@/convex/permissions";
+import { PERMISSIONS } from "@/convex/permissionFlags";
 import { ChatPanel } from "@/components/chat/chat-panel";
 import { VoiceChannelView } from "@/components/voice/voice-channel-view";
 import { ChannelHeader } from "@/components/server/channel-header";

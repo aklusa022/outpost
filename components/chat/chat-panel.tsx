@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Input } from "@cloudflare/kumo";
@@ -111,7 +111,7 @@ export function ChatPanel({
             </div>
           )}
           {messages.length === 0 && !hasMore && (
-            <p className="py-8 text-center text-sm text-muted-foreground">
+            <p className="py-8 text-center text-sm text-kumo-subtle">
               No messages yet — say hi!
             </p>
           )}
@@ -167,7 +167,7 @@ function MessageRow({
 
   return (
     <div
-      className={`group flex items-start gap-3 rounded-md px-2 py-1 hover:bg-accent/50 ${grouped ? "" : "mt-3"}`}
+      className={`group flex items-start gap-3 rounded-md px-2 py-1 hover:bg-kumo-tint/50 ${grouped ? "" : "mt-3"}`}
     >
       <div className="w-8 shrink-0">
         {!grouped && (
@@ -183,7 +183,7 @@ function MessageRow({
             <span className="text-sm font-semibold">
               {message.author?.displayName ?? "Unknown user"}
             </span>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-xs text-kumo-subtle">
               {new Date(message._creationTime).toLocaleString()}
             </span>
           </div>
@@ -211,7 +211,7 @@ function MessageRow({
           <p className="whitespace-pre-wrap break-words text-sm">
             {message.content}
             {message.editedAt && (
-              <span className="ml-1 text-[10px] text-muted-foreground">
+              <span className="ml-1 text-[10px] text-kumo-subtle">
                 (edited)
               </span>
             )}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery } from "convex/react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { UserAvatar } from "@/components/user-avatar";
@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useServerPermissions } from "@/hooks/use-server-permissions";
-import { PERMISSIONS } from "@/convex/permissions";
+import { PERMISSIONS } from "@/convex/permissionFlags";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CaretDownIcon } from "@phosphor-icons/react";
 

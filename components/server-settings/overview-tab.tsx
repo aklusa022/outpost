@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { Input } from "@cloudflare/kumo";
 import { Button } from "@/components/ui/button";
 import { useServerPermissions } from "@/hooks/use-server-permissions";
-import { PERMISSIONS } from "@/convex/permissions";
+import { PERMISSIONS } from "@/convex/permissionFlags";
 
 export function OverviewTab({ serverId }: { serverId: Id<"servers"> }) {
   const server = useQuery(api.servers.getServer, { serverId });

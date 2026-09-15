@@ -17,6 +17,7 @@ import type * as friends from "../friends.js";
 import type * as http from "../http.js";
 import type * as invites from "../invites.js";
 import type * as messages from "../messages.js";
+import type * as permissionFlags from "../permissionFlags.js";
 import type * as permissions from "../permissions.js";
 import type * as presence from "../presence.js";
 import type * as roles from "../roles.js";
@@ -41,6 +42,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   invites: typeof invites;
   messages: typeof messages;
+  permissionFlags: typeof permissionFlags;
   permissions: typeof permissions;
   presence: typeof presence;
   roles: typeof roles;

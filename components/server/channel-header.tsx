@@ -14,7 +14,7 @@ export function ChannelHeader({
 }) {
   return (
     <div className="flex h-12 shrink-0 items-center gap-1.5 border-b px-4 font-semibold">
-      <HashIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+      <HashIcon className="h-4 w-4 shrink-0 text-kumo-subtle" />
       <span className="min-w-0 flex-1 truncate">{channelName}</span>
       <div className="flex shrink-0 items-center gap-1">
         <Button

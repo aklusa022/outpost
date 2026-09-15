@@ -2,13 +2,13 @@
 
 import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useServerPermissions } from "@/hooks/use-server-permissions";
-import { PERMISSIONS } from "@/convex/permissions";
+import { PERMISSIONS } from "@/convex/permissionFlags";
 import { CreateCategoryDialog } from "@/components/create-category-dialog";
 import { CreateChannelDialog } from "@/components/create-channel-dialog";
 import { FolderOpenIcon, HashIcon, TrashIcon, SpeakerHighIcon } from "@phosphor-icons/react";
@@ -70,7 +70,7 @@ export function ChannelsTab({ serverId }: { serverId: Id<"servers"> }) {
 
         {uncategorized.length > 0 && (
           <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase text-muted-foreground">
+            <p className="text-xs font-semibold uppercase text-kumo-subtle">
               No category
             </p>
             {uncategorized.map((channel) => (
@@ -89,7 +89,7 @@ export function ChannelsTab({ serverId }: { serverId: Id<"servers"> }) {
         {sortedCategories.map((category) => (
           <div key={category._id} className="space-y-1">
             <div className="flex items-center justify-between gap-2">
-              <p className="flex items-center gap-1.5 text-xs font-semibold uppercase text-muted-foreground">
+              <p className="flex items-center gap-1.5 text-xs font-semibold uppercase text-kumo-subtle">
                 <FolderOpenIcon className="h-3.5 w-3.5" />
                 {category.name}
               </p>
@@ -99,7 +99,7 @@ export function ChannelsTab({ serverId }: { serverId: Id<"servers"> }) {
                   <Button
                     size="icon"
                     variant="ghost"
-                    className="h-6 w-6 text-destructive hover:text-destructive"
+                    className="h-6 w-6 text-kumo-danger hover:text-kumo-danger"
                     disabled={pending === category._id}
                     onClick={() => handleDeleteCategory(category._id, category.name)}
                     aria-label={`Delete ${category.name} category`}
@@ -126,7 +126,7 @@ export function ChannelsTab({ serverId }: { serverId: Id<"servers"> }) {
         ))}
 
         {sortedCategories.length === 0 && uncategorized.length === 0 && (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-kumo-subtle">
             No categories or channels yet — create one above.
           </p>
         )}
@@ -149,12 +149,12 @@ function ChannelRow({
   onDelete: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-accent/50">
+    <div className="flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-kumo-tint/50">
       <span className="flex min-w-0 items-center gap-1.5 text-sm">
         {type === "voice" ? (
-          <SpeakerHighIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <SpeakerHighIcon className="h-4 w-4 shrink-0 text-kumo-subtle" />
         ) : (
-          <HashIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <HashIcon className="h-4 w-4 shrink-0 text-kumo-subtle" />
         )}
         <span className="truncate">{name}</span>
       </span>
@@ -162,7 +162,7 @@ function ChannelRow({
         <Button
           size="icon"
           variant="ghost"
-          className="h-6 w-6 text-destructive hover:text-destructive"
+          className="h-6 w-6 text-kumo-danger hover:text-kumo-danger"
           disabled={disabled}
           onClick={onDelete}
           aria-label={`Delete ${name} channel`}

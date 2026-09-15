@@ -9,50 +9,17 @@
  */
 @import "@cloudflare/kumo/styles/tailwind";
 @import "tailwindcss";
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
 
 @source "../node_modules/@cloudflare/kumo/dist/**/*.{js,jsx,ts,tsx}";
 
-@custom-variant dark (&:is(.dark *));
+/* Orientation variants used by the scroll-area and separator wrappers. */
+@custom-variant data-horizontal (&:where([data-orientation="horizontal"]));
+@custom-variant data-vertical (&:where([data-orientation="vertical"]));
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-geist-sans);
-  --color-rail: var(--rail);
-  --color-rail-foreground: var(--rail-foreground);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -63,65 +30,77 @@
 }
 
 /*
- * Outpost is dark-mode-only, styled after Discord's dark theme:
- * a near-black server rail, dark-gray sidebars/chat, blurple accent.
- * The same palette is used for `:root` and `.dark` since we always
- * render with the `dark` class on <html> — there is no light theme.
+ * Outpost is dark-mode-only. Kumo is the single theme system: every surface,
+ * text and accent color in the app comes from Kumo's semantic tokens
+ * (`bg-kumo-*`, `text-kumo-*`, `border-kumo-*`, ...). Kumo's own dark palette
+ * is near-black (10–17% lightness); Outpost instead runs Kumo's components
+ * on a lighter, Discord-style grey ramp with a blurple accent.
  *
- * These shadcn-style CSS variables (and the `bg-background`/
- * `text-muted-foreground`/etc utility classes they back) are kept running
- * alongside Kumo's own `bg-kumo-*`/`text-kumo-*` semantic tokens during the
- * Kumo migration: Kumo's own components (Button, Dialog, Input, ...) use
- * Kumo's tokens internally, while this app's surrounding layout chrome
- * (sidebars, panels, borders) still reads these variables. Migrating that
- * remaining chrome to Kumo's tokens file-by-file, then deleting this block
- * plus the `shadcn/tailwind.css` import above, is a follow-up — see the
- * Kumo migration plan.
+ * Kumo declares its tokens in `@theme` as `light-dark(light, dark)` pairs.
+ * Tailwind emits every `@theme` declaration into one unlayered `:root, :host`
+ * rule, which beats anything in `@layer base` no matter the specificity — so
+ * the palette has to be re-pointed in `@theme` too. Declared after Kumo's
+ * import, these values replace Kumo's for the same variable names. The app
+ * always renders with `data-mode="dark"` on <html>, so plain dark values
+ * (no light-dark()) are correct here.
  */
-:root,
-.dark {
-  --background: #313338;
-  --foreground: #dbdee1;
-  --card: #2b2d31;
-  --card-foreground: #dbdee1;
-  --popover: #2b2d31;
-  --popover-foreground: #dbdee1;
-  --primary: #5865f2;
-  --primary-foreground: #ffffff;
-  --secondary: #4e5058;
-  --secondary-foreground: #dbdee1;
-  --muted: #2b2d31;
-  --muted-foreground: #949ba4;
-  --accent: #404249;
-  --accent-foreground: #ffffff;
-  --destructive: #da373c;
-  --destructive-foreground: #ffffff;
-  --border: #1e1f22;
-  --input: #1e1f22;
-  --ring: #5865f2;
-  --chart-1: #5865f2;
-  --chart-2: #23a55a;
-  --chart-3: #f0b232;
-  --chart-4: #da373c;
-  --chart-5: #949ba4;
-  --radius: 0.5rem;
-  --rail: #1e1f22;
-  --rail-foreground: #dbdee1;
-  --sidebar: #2b2d31;
-  --sidebar-foreground: #dbdee1;
-  --sidebar-primary: #5865f2;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #404249;
-  --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: #1e1f22;
-  --sidebar-ring: #5865f2;
+@theme {
+  /* Surfaces, darkest → lightest: server rail, sidebars/cards/popovers, main. */
+  --color-kumo-canvas: #1e1f22;
+  --color-kumo-recessed: #1e1f22;
+  --color-kumo-elevated: #2b2d31;
+  --color-kumo-overlay: #2b2d31;
+  --color-kumo-base: #313338;
+  --color-kumo-tint: #404249; /* hover */
+  --color-kumo-control: #1e1f22; /* inputs */
+  --color-kumo-fill: #404249;
+  --color-kumo-fill-hover: #4e5058;
+  --color-kumo-interact: #4e5058;
+  --color-kumo-contrast: #ffffff;
+
+  /* Lines */
+  --color-kumo-line: #1e1f22;
+  --color-kumo-hairline: #3f4147;
+  --color-kumo-arrow-stroke: #1e1f22;
+
+  /* Accents */
+  --color-kumo-brand: #5865f2;
+  --color-kumo-brand-hover: #4752c4;
+  --color-kumo-danger: #da373c;
+  --color-kumo-danger-tint: rgb(218 55 60 / 0.15);
+  --color-kumo-success: #23a55a;
+  --color-kumo-warning: #f0b232;
+  --color-kumo-info: #00a8fc;
+  --color-kumo-focus: #dbdee1;
+
+  /* Kumo only defines `subtle` as a text token; Outpost also uses it as a
+   * faint fill (typing dots, dividers), so expose it as a color too. */
+  --color-kumo-subtle: #949ba4;
+
+  /* Text */
+  --text-color-kumo-default: #dbdee1;
+  --text-color-kumo-strong: #ffffff;
+  --text-color-kumo-subtle: #949ba4;
+  --text-color-kumo-inactive: #6d6f78;
+  --text-color-kumo-placeholder: #87898c;
+  --text-color-kumo-inverse: #1e1f22;
+  --text-color-kumo-brand: #5865f2;
+  --text-color-kumo-link: #00a8fc;
+  --text-color-kumo-info: #00a8fc;
+  --text-color-kumo-success: #23a55a;
+  --text-color-kumo-danger: #f23f43;
+  --text-color-kumo-warning: #f0b232;
 }
 
 @layer base {
+  :root {
+    --radius: 0.5rem;
+  }
+
   * {
-    @apply border-border outline-ring/50;
+    @apply border-kumo-line outline-kumo-brand/50;
   }
   body {
-    @apply bg-background text-foreground font-sans;
+    @apply bg-kumo-base text-kumo-default font-sans;
   }
 }

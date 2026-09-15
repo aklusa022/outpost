@@ -84,6 +84,7 @@ http.route({
           await ctx.runMutation(internal.voiceChannels.reconcileParticipantLeft, {
             rtkMeetingId: event.meeting.id,
             userId: participant.customParticipantId as Id<"users">,
+            peerId: participant.peerId,
           });
         }
         break;

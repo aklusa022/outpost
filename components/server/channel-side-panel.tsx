@@ -17,7 +17,7 @@ export function ChannelSidePanel({
   className?: string;
 }) {
   return (
-    <div className={cn("border-l bg-sidebar", className)}>
+    <div className={cn("border-l bg-kumo-elevated", className)}>
       {mode === "members" ? (
         <MembersPanel serverId={serverId} />
       ) : (

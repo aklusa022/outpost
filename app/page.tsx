@@ -44,10 +44,10 @@ const FEATURES = [
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-background text-foreground">
+    <main className="min-h-screen bg-kumo-base text-kumo-default">
       <AuthLoading>
         <div className="flex min-h-screen items-center justify-center">
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <p className="text-sm text-kumo-subtle">Loading…</p>
         </div>
       </AuthLoading>
       <Authenticated>
@@ -76,7 +76,7 @@ function NavBar() {
   return (
     <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
       <div className="flex items-center gap-2 font-extrabold tracking-tight">
-        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-kumo-brand text-white">
           <HashIcon className="h-5 w-5" />
         </div>
         Outpost
@@ -100,18 +100,18 @@ function Hero() {
         aria-hidden
         className="pointer-events-none absolute inset-x-0 -top-40 -z-10 flex justify-center blur-3xl"
       >
-        <div className="h-[420px] w-[720px] rounded-full bg-primary/25" />
+        <div className="h-[420px] w-[720px] rounded-full bg-kumo-brand/25" />
       </div>
       <div className="mx-auto flex max-w-4xl flex-col items-center gap-6 px-6 pb-24 pt-16 text-center">
-        <span className="rounded-full border border-border bg-card px-4 py-1 text-xs font-medium text-muted-foreground">
+        <span className="rounded-full border border-kumo-line bg-kumo-elevated px-4 py-1 text-xs font-medium text-kumo-subtle">
           Voice chat for your community
         </span>
         <h1 className="text-5xl font-black tracking-tight text-balance sm:text-6xl">
           Hop in, talk,
           <br />
-          <span className="text-primary">no friction.</span>
+          <span className="text-kumo-brand">no friction.</span>
         </h1>
-        <p className="max-w-xl text-lg text-muted-foreground text-balance">
+        <p className="max-w-xl text-lg text-kumo-subtle text-balance">
           Outpost is a fast voice chat platform for your community — jump
           into a voice channel with one click, plus servers, roles &amp;
           permissions, text channels, friends, and DMs, all realtime.
@@ -140,13 +140,13 @@ function Features() {
         {FEATURES.map((feature) => (
           <div
             key={feature.title}
-            className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-6"
+            className="flex flex-col gap-3 rounded-2xl border border-kumo-line bg-kumo-elevated p-6"
           >
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 text-primary">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-kumo-brand/15 text-kumo-brand">
               <feature.icon className="h-5 w-5" />
             </div>
             <h3 className="font-semibold">{feature.title}</h3>
-            <p className="text-sm text-muted-foreground">{feature.description}</p>
+            <p className="text-sm text-kumo-subtle">{feature.description}</p>
           </div>
         ))}
       </div>
@@ -157,12 +157,12 @@ function Features() {
 function BottomCta() {
   return (
     <section className="mx-auto max-w-4xl px-6 pb-24">
-      <div className="flex flex-col items-center gap-4 rounded-3xl border border-border bg-card px-8 py-12 text-center">
-        <SparkleIcon className="h-8 w-8 text-primary" />
+      <div className="flex flex-col items-center gap-4 rounded-3xl border border-kumo-line bg-kumo-elevated px-8 py-12 text-center">
+        <SparkleIcon className="h-8 w-8 text-kumo-brand" />
         <h2 className="text-3xl font-bold tracking-tight">
           Your community is waiting.
         </h2>
-        <p className="max-w-md text-muted-foreground">
+        <p className="max-w-md text-kumo-subtle">
           Create your first server and invite your friends in under a minute.
         </p>
         <SignUpButton mode="modal">
@@ -177,10 +177,10 @@ function BottomCta() {
 
 function Footer() {
   return (
-    <footer className="border-t border-border">
-      <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-6 py-8 text-sm text-muted-foreground sm:flex-row">
+    <footer className="border-t border-kumo-line">
+      <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-6 py-8 text-sm text-kumo-subtle sm:flex-row">
         <span>© {new Date().getFullYear()} Outpost</span>
-        <Link href="/app" className="hover:text-foreground">
+        <Link href="/app" className="hover:text-kumo-default">
           Go to app
         </Link>
       </div>
@@ -195,7 +195,7 @@ function RedirectToApp() {
   }, [router]);
   return (
     <div className="flex min-h-screen items-center justify-center">
-      <p className="text-sm text-muted-foreground">Taking you to the app…</p>
+      <p className="text-sm text-kumo-subtle">Taking you to the app…</p>
     </div>
   );
 }

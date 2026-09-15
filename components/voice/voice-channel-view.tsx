@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useQuery } from "convex/react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useVoiceCall } from "@/hooks/use-voice-call";
@@ -21,7 +21,7 @@ function RosterList({ roster }: { roster: RosterEntry[] }) {
   return (
     <div className="flex flex-col gap-1">
       {roster.map((p) => (
-        <div key={p.userId} className="flex items-center gap-2 rounded-md bg-accent/40 px-2 py-1.5">
+        <div key={p.userId} className="flex items-center gap-2 rounded-md bg-kumo-tint/40 px-2 py-1.5">
           <UserAvatar name={p.user?.displayName ?? "?"} imageUrl={p.user?.imageUrl} />
           <span className="truncate text-sm">{p.user?.displayName ?? "Unknown"}</span>
         </div>
@@ -66,9 +66,9 @@ export function VoiceChannelView({
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 p-6">
         <div className="flex flex-col items-center gap-2">
-          <SpeakerHighIcon className="h-10 w-10 text-muted-foreground" />
+          <SpeakerHighIcon className="h-10 w-10 text-kumo-subtle" />
           <p className="text-lg font-semibold">{channelName}</p>
-          <p className="text-xs text-muted-foreground">Joining…</p>
+          <p className="text-xs text-kumo-subtle">Joining…</p>
         </div>
         {joiningRoster.length > 0 && (
           <div className="flex w-full max-w-64 flex-col items-stretch gap-2">
@@ -92,13 +92,13 @@ export function VoiceChannelView({
   return (
     <div className="flex h-full flex-col items-center justify-center gap-4 p-6">
       <div className="flex flex-col items-center gap-2">
-        <SpeakerHighIcon className="h-10 w-10 text-muted-foreground" />
+        <SpeakerHighIcon className="h-10 w-10 text-kumo-subtle" />
         <p className="text-lg font-semibold">{channelName}</p>
       </div>
 
       {roster.length > 0 && (
         <div className="flex w-full max-w-64 flex-col items-stretch gap-2">
-          <p className="text-center text-xs text-muted-foreground">In this call</p>
+          <p className="text-center text-xs text-kumo-subtle">In this call</p>
           <RosterList roster={roster} />
         </div>
       )}

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useMutation } from "convex/react";
 import { useClerk } from "@clerk/nextjs";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 import { api } from "@/convex/_generated/api";
 import { Doc } from "@/convex/_generated/dataModel";
 import { Dialog, Input, Select } from "@cloudflare/kumo";
@@ -78,7 +78,7 @@ export function AccountSettingsDialog({
           <UserAvatar name={displayName || user.displayName} imageUrl={user.imageUrl} className="h-14 w-14" />
           <div className="min-w-0">
             <p className="truncate font-semibold">{user.displayName}</p>
-            <p className="truncate text-sm text-muted-foreground">@{user.username}</p>
+            <p className="truncate text-sm text-kumo-subtle">@{user.username}</p>
           </div>
         </div>
 
@@ -126,7 +126,7 @@ export function AccountSettingsDialog({
           <Button
             icon={<SignOutIcon/>}
             variant="outline"
-            className="w-full justify-start gap-2 text-destructive hover:text-destructive"
+            className="w-full justify-start gap-2 text-kumo-danger hover:text-kumo-danger"
             onClick={() => clerk.signOut()}
           >
 

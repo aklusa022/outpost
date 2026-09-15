@@ -61,6 +61,10 @@ type ButtonOwnProps = ButtonWithTextOwnProps | ButtonIconOnlyOwnProps;
 //
 // The size/aria-label union above mirrors Kumo's own ButtonProps split, so
 // TypeScript enforces an accessible name on every size="icon*" call site.
+// Primary/destructive buttons keep Kumo's own "emphasis" treatment (lighter
+// fill, ring, gradient overlay that shifts on hover), computed by Kumo from
+// `--color-kumo-brand` / `--color-kumo-danger`, which globals.css points at
+// Outpost's blurple and red.
 function Button(props: ButtonOwnProps) {
   const { variant = "default", size = "default", ...rest } = props;
   const { size: kumoSize, shape } = SIZE_MAP[size];

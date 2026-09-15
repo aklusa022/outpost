@@ -20,7 +20,7 @@ export function ActiveCallBar() {
   if (status === "idle" || !activeChannelId) return null;
 
   return (
-    <div className="flex h-14 shrink-0 items-center gap-2 border-t bg-sidebar px-3">
+    <div className="flex h-14 shrink-0 items-center gap-2 border-t bg-kumo-elevated px-3">
       <SpeakerHighIcon className="h-4 w-4 shrink-0 text-emerald-500" />
       <div className="min-w-0 flex-1">
         <p className="truncate text-xs font-medium text-emerald-500">

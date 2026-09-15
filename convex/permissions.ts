@@ -1,33 +1,16 @@
 import { QueryCtx, MutationCtx, internalMutation } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
+import {
+  ALL_PERMISSIONS,
+  PERMISSIONS,
+  hasPermission,
+  type PermissionFlag,
+} from "./permissionFlags";
 
-// Permission bitmask flags.
-export const PERMISSIONS = {
-  VIEW_CHANNELS: 1 << 0,
-  SEND_MESSAGES: 1 << 1,
-  MANAGE_MESSAGES: 1 << 2,
-  CREATE_INVITE: 1 << 3,
-  MANAGE_CHANNELS: 1 << 4,
-  MANAGE_ROLES: 1 << 5,
-  MANAGE_SERVER: 1 << 6,
-  KICK_MEMBERS: 1 << 7,
-  BAN_MEMBERS: 1 << 8,
-  ADMINISTRATOR: 1 << 9,
-  CONNECT: 1 << 10,
-} as const;
-
-export type PermissionFlag = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
-
-export const ALL_PERMISSIONS = Object.values(PERMISSIONS).reduce(
-  (acc, bit) => acc | bit,
-  0,
-);
-
-export const DEFAULT_ROLE_PERMISSIONS =
-  PERMISSIONS.VIEW_CHANNELS |
-  PERMISSIONS.SEND_MESSAGES |
-  PERMISSIONS.CREATE_INVITE |
-  PERMISSIONS.CONNECT;
+// The flag constants live in `./permissionFlags` (no server imports) so client
+// code can use them without pulling Convex's server runtime into the browser.
+// Re-exported here so backend modules keep importing from one place.
+export * from "./permissionFlags";
 
 /**
  * `DEFAULT_ROLE_PERMISSIONS` is only read once, when `createServer` inserts
@@ -48,10 +31,6 @@ export const backfillConnectPermission = internalMutation({
     }
   },
 });
-
-export function hasPermission(bitmask: number, flag: PermissionFlag): boolean {
-  return (bitmask & PERMISSIONS.ADMINISTRATOR) !== 0 || (bitmask & flag) !== 0;
-}
 
 /**
  * Computes a member's effective permission bitmask within a server:

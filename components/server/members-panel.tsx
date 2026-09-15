@@ -16,7 +16,7 @@ const STATUS_DOT: Record<"online" | "idle" | "dnd" | "offline", string> = {
   online: "bg-emerald-500",
   idle: "bg-amber-500",
   dnd: "bg-red-500",
-  offline: "bg-muted-foreground/40",
+  offline: "bg-kumo-subtle/40",
 };
 
 function effectiveStatus(
@@ -34,7 +34,7 @@ export function MembersPanel({ serverId }: { serverId: Id<"servers"> }) {
   const presence = useServerPresence();
 
   if (!members) {
-    return <p className="p-4 text-sm text-muted-foreground">Loading members…</p>;
+    return <p className="p-4 text-sm text-kumo-subtle">Loading members…</p>;
   }
 
   const onlineByUserId = new Map(presence?.map((p) => [p.userId, p.online]) ?? []);
@@ -71,7 +71,7 @@ function MemberSection({
   if (entries.length === 0) return null;
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="px-2 text-xs font-semibold uppercase text-muted-foreground">
+      <span className="px-2 text-xs font-semibold uppercase text-kumo-subtle">
         {title}
       </span>
       {entries.map(({ member, status }) => (
@@ -79,14 +79,14 @@ function MemberSection({
           key={member.user._id}
           className={cn(
             "flex items-center gap-2 rounded-md px-2 py-1.5",
-            status === "offline" ? "opacity-50" : "hover:bg-accent",
+            status === "offline" ? "opacity-50" : "hover:bg-kumo-tint",
           )}
         >
           <div className="relative shrink-0">
             <UserAvatar name={member.user.displayName} imageUrl={member.user.imageUrl} className="h-8 w-8" />
             <span
               className={cn(
-                "absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-sidebar",
+                "absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-kumo-line",
                 STATUS_DOT[status],
               )}
             />

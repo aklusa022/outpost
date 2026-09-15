@@ -201,7 +201,7 @@ test("markJoined requires CONNECT, records the beacon token, and leaveByBeacon r
   expect(participants).toHaveLength(1);
   expect(participants[0].userId).toBe(member.doc._id);
 
-  // The webhook's re-upsert for the same channel keeps the beacon token.
+  // The webhook's confirmation for the same join only refreshes the row.
   await t.mutation(internal.voiceChannels.reconcileParticipantJoined, {
     rtkMeetingId: "meeting-1",
     userId: member.doc._id,
@@ -215,6 +215,15 @@ test("markJoined requires CONNECT, records the beacon token, and leaveByBeacon r
   participants = await owner.as.query(api.voiceChannels.listVoiceParticipants, { serverId });
   expect(participants).toHaveLength(1);
   await t.mutation(api.voiceChannels.leaveByBeacon, { beaconToken: "b-1" });
+  participants = await owner.as.query(api.voiceChannels.listVoiceParticipants, { serverId });
+  expect(participants).toHaveLength(0);
+
+  // A participantJoined webhook that arrives after the client already left
+  // must not bring the row back.
+  await t.mutation(internal.voiceChannels.reconcileParticipantJoined, {
+    rtkMeetingId: "meeting-1",
+    userId: member.doc._id,
+  });
   participants = await owner.as.query(api.voiceChannels.listVoiceParticipants, { serverId });
   expect(participants).toHaveLength(0);
 
@@ -307,7 +316,7 @@ test("recordUserJoinedVoiceChannel enforces one call at a time", async () => {
   expect(participants[0].channelId).toBe(channelB);
 });
 
-test("reconcileParticipantLeft removes the participant's row", async () => {
+test("reconcileParticipantLeft only removes the row for the matching peer id", async () => {
   const t = convexTest(schema);
   const owner = await createUser(t, "owner", "Owner");
   const serverId = await owner.as.mutation(api.servers.createServer, { name: "Test Server" });
@@ -325,14 +334,35 @@ test("reconcileParticipantLeft removes the participant's row", async () => {
   });
   expect((await owner.as.query(api.voiceChannels.myActiveCall, {}))?.channelId).toBe(channelId);
 
+  // Media join not complete yet (no peer id recorded): a stale Left is ignored.
   await owner.as.mutation(internal.voiceChannels.reconcileParticipantLeft, {
     rtkMeetingId: "meeting-1",
     userId: owner.doc._id,
+    peerId: "peer-old",
+  });
+  expect((await owner.as.query(api.voiceChannels.myActiveCall, {}))?.channelId).toBe(channelId);
+
+  // The client records its peer id via the first heartbeat after joining.
+  await owner.as.mutation(api.voiceChannels.heartbeat, { peerId: "peer-new" });
+
+  // A Left for a previous join of the same user is ignored...
+  await owner.as.mutation(internal.voiceChannels.reconcileParticipantLeft, {
+    rtkMeetingId: "meeting-1",
+    userId: owner.doc._id,
+    peerId: "peer-old",
+  });
+  expect((await owner.as.query(api.voiceChannels.myActiveCall, {}))?.channelId).toBe(channelId);
+
+  // ...and the one for this join removes the row.
+  await owner.as.mutation(internal.voiceChannels.reconcileParticipantLeft, {
+    rtkMeetingId: "meeting-1",
+    userId: owner.doc._id,
+    peerId: "peer-new",
   });
   expect(await owner.as.query(api.voiceChannels.myActiveCall, {})).toBeNull();
 });
 
-test("reconcileMeetingEnded clears every participant of that meeting", async () => {
+test("reconcileMeetingEnded clears only participants no client is keeping alive", async () => {
   const t = convexTest(schema);
   const owner = await createUser(t, "owner", "Owner");
   const member = await createUser(t, "member", "Member");
@@ -362,13 +392,33 @@ test("reconcileMeetingEnded clears every participant of that meeting", async () 
     rtkMeetingId: "meeting-1",
   });
 
+  // The owner re-joined moments ago (fresh heartbeat); the member's client
+  // vanished 31 s ago. A late `meeting.ended` must only clear the latter.
+  await t.run(async (ctx) => {
+    const rows = await ctx.db.query("voiceParticipants").collect();
+    const stale = rows.find((r) => r.userId === member.doc._id)!;
+    await ctx.db.patch(stale._id, { lastSeenAt: Date.now() - 31_000 });
+  });
+
   await owner.as.mutation(internal.voiceChannels.reconcileMeetingEnded, {
     rtkMeetingId: "meeting-1",
   });
 
-  const participants = await owner.as.query(api.voiceChannels.listVoiceParticipants, {
+  let participants = await owner.as.query(api.voiceChannels.listVoiceParticipants, {
     serverId,
   });
+  expect(participants).toHaveLength(1);
+  expect(participants[0].userId).toBe(owner.doc._id);
+
+  // Once nobody heartbeats it, the same event clears the rest.
+  await t.run(async (ctx) => {
+    const rows = await ctx.db.query("voiceParticipants").collect();
+    for (const row of rows) await ctx.db.patch(row._id, { lastSeenAt: Date.now() - 31_000 });
+  });
+  await owner.as.mutation(internal.voiceChannels.reconcileMeetingEnded, {
+    rtkMeetingId: "meeting-1",
+  });
+  participants = await owner.as.query(api.voiceChannels.listVoiceParticipants, { serverId });
   expect(participants).toHaveLength(0);
 });
 

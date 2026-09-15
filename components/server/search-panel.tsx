@@ -31,16 +31,16 @@ export function SearchPanel({ channelId }: { channelId: Id<"channels"> }) {
       />
       <div className="flex-1 overflow-y-auto">
         {!debounced && (
-          <p className="p-2 text-sm text-muted-foreground">
+          <p className="p-2 text-sm text-kumo-subtle">
             Search this channel&apos;s message history.
           </p>
         )}
         {debounced && results?.length === 0 && (
-          <p className="p-2 text-sm text-muted-foreground">No matching messages.</p>
+          <p className="p-2 text-sm text-kumo-subtle">No matching messages.</p>
         )}
         <div className="flex flex-col gap-1">
           {results?.map((message) => (
-            <div key={message._id} className="flex items-start gap-2 rounded-md p-2 hover:bg-accent">
+            <div key={message._id} className="flex items-start gap-2 rounded-md p-2 hover:bg-kumo-tint">
               <UserAvatar
                 name={message.author?.displayName ?? "Unknown"}
                 imageUrl={message.author?.imageUrl}
@@ -51,11 +51,11 @@ export function SearchPanel({ channelId }: { channelId: Id<"channels"> }) {
                   <span className="truncate text-sm font-semibold">
                     {message.author?.displayName ?? "Unknown user"}
                   </span>
-                  <span className="shrink-0 text-[11px] text-muted-foreground">
+                  <span className="shrink-0 text-[11px] text-kumo-subtle">
                     {new Date(message._creationTime).toLocaleString()}
                   </span>
                 </div>
-                <p className="truncate text-sm text-muted-foreground">{message.content}</p>
+                <p className="truncate text-sm text-kumo-subtle">{message.content}</p>
               </div>
             </div>
           ))}

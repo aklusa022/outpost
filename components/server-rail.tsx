@@ -16,7 +16,7 @@ export function ServerRail() {
   const pathname = usePathname();
 
   return (
-    <div className="flex h-full w-[72px] shrink-0 flex-col items-center gap-2 overflow-y-auto border-r border-border bg-rail py-3">
+    <div className="flex h-full w-[72px] shrink-0 flex-col items-center gap-2 overflow-y-auto border-r border-kumo-line bg-kumo-canvas py-3">
       <RailButton
         href="/app/friends"
         label="Friends & DMs"
@@ -72,8 +72,8 @@ function RailButton({
           href={href}
           prefetch={false}
           className={cn(
-            "flex h-12 w-12 items-center justify-center rounded-2xl bg-secondary transition-all hover:rounded-xl hover:bg-primary hover:text-primary-foreground",
-            active && "rounded-xl bg-primary text-primary-foreground",
+            "flex h-12 w-12 items-center justify-center rounded-2xl bg-kumo-fill transition-all hover:rounded-xl hover:bg-kumo-brand hover:text-white",
+            active && "rounded-xl bg-kumo-brand text-white",
           )}
         />
       }
