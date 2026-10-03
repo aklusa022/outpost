@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useQuery } from "convex/react";
-import { toast } from "@/lib/toast";
+import { errorMessage, toast } from "@/lib/toast";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useVoiceCall } from "@/hooks/use-voice-call";
@@ -115,7 +115,7 @@ export function VoiceChannelView({
     try {
       await join(channelId, serverId);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to join the call");
+      toast.error(errorMessage(err, "Failed to join the call"));
     }
   }
 
