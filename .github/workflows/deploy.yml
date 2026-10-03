@@ -1,0 +1,115 @@
+# CI/CD for production.
+#
+# - Every pull request and push to main runs lint, tests and a typecheck.
+# - Every push to main (and manual runs from main) then deploys:
+#     1. Convex backend -> prod deployment chatty-bison-763 (functions + schema
+#        go first, so the new frontend never talks to an older backend).
+#     2. The vinext Worker -> `outpost-app` on outpost.zenfora.io.
+#     3. Checks the site responds. Because the job runs in the `production`
+#        environment, GitHub records it as a production deployment, which is
+#        what puts "Deployments -> production -> View deployment" in the repo
+#        sidebar.
+#
+# Required in Settings -> Environments -> `production`:
+#   secrets:   CLOUDFLARE_API_TOKEN  (Workers deploy token, NOT the RealtimeKit one)
+#              CONVEX_DEPLOY_KEY     (prod deploy key for chatty-bison-763)
+#   variable:  CLOUDFLARE_ACCOUNT_ID (or as a secret)
+#   optional:  PRODUCTION_URL variable, defaults to https://outpost.zenfora.io
+#
+# Runtime secrets are NOT stored here: CLERK_SECRET_KEY lives on the Worker
+# (`wrangler secret put`), RealtimeKit/R2/Clerk-webhook secrets live on the
+# Convex deployment (`npx convex env set ... --prod`).
+#
+# Dev (outpost-dev.zenfora.io) is still deployed manually with
+# `bun run deploy:vinext:dev`.
+name: Deploy
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Lint, test, typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.18
+
+      - run: bun install --frozen-lockfile
+
+      - run: bun run lint
+
+      - run: bun run test
+
+      - run: bunx tsc --noEmit
+
+  deploy:
+    name: Deploy to production
+    needs: check
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_URL || 'https://outpost.zenfora.io' }}
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
+    env:
+      PRODUCTION_URL: ${{ vars.PRODUCTION_URL || 'https://outpost.zenfora.io' }}
+      # NEXT_PUBLIC_* values are inlined into the client bundle at build
+      # time, so the build needs them in its environment. All public; keep in
+      # sync with the top-level `vars` in wrangler.jsonc.
+      NEXT_PUBLIC_CONVEX_URL: https://chatty-bison-763.convex.cloud
+      NEXT_PUBLIC_CONVEX_SITE_URL: https://chatty-bison-763.convex.site
+      NEXT_PUBLIC_SITE_URL: https://outpost.zenfora.io
+      BASE_URL: https://outpost.zenfora.io
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_live_Y2xlcmsuemVuZm9yYS5pbyQ
+      CLERK_FRONTEND_API_URL: https://clerk.zenfora.io
+      CLERK_JWT_ISSUER_DOMAIN: https://clerk.zenfora.io
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.18
+
+      - run: bun install --frozen-lockfile
+
+      - name: Deploy Convex backend
+        run: bunx convex deploy -y
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+
+      # `vinext-cloudflare deploy` runs the production build itself, then
+      # prerenders, seeds the KV cache, deploys with wrangler and warms the
+      # CDN.
+      - name: Build and deploy the Worker
+        run: bun run deploy:vinext
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Check the site is up
+        run: |
+          for attempt in 1 2 3 4 5; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$PRODUCTION_URL")
+            echo "attempt $attempt: HTTP $code"
+            if [ "$code" -ge 200 ] && [ "$code" -lt 400 ]; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::$PRODUCTION_URL is not responding"
+          exit 1
+
