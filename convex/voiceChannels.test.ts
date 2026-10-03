@@ -1,15 +1,15 @@
 import { convexTest } from "convex-test";
-import { expect, test } from "vitest";
+import { ConvexError } from "convex/values";
+import { afterEach, expect, test, vi } from "vitest";
 import schema from "./schema";
 import { api, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import { PERMISSIONS } from "./permissions";
 
-// NOTE: `joinVoiceChannel` itself makes real `fetch` calls to Cloudflare's
-// RealtimeKit REST API and is NOT exercised here — that, along with webhook
-// signature verification against the real RealtimeKit public key and actual
-// WebRTC audio/video, requires a live two-browser-session pass (see the
-// plan's rollout section). These tests only cover the pure queries/mutations.
+// NOTE: `ensureVoiceToken` is exercised below against a stubbed `fetch` only.
+// The real RealtimeKit REST API, webhook signature verification against the
+// real RealtimeKit public key, and actual WebRTC audio/video still require a
+// live two-browser-session pass.
 
 function asUser(t: ReturnType<typeof convexTest>, subject: string, name: string) {
   return t.withIdentity({ subject, name });
@@ -199,10 +199,16 @@ test("markJoined requires CONNECT, records the beacon token, and leaveByBeacon r
     type: "voice",
   });
 
-  // No meeting yet: the client must call ensureVoiceToken first.
-  await expect(
-    member.as.mutation(api.voiceChannels.markJoined, { channelId, beaconToken: "b-1" }),
-  ).rejects.toThrow();
+  // No meeting yet: the client must call ensureVoiceToken first. This is a
+  // ConvexError so production surfaces the reason instead of "Server Error".
+  const noMeeting = await member.as
+    .mutation(api.voiceChannels.markJoined, { channelId, beaconToken: "b-1" })
+    .then(
+      () => null,
+      (err: unknown) => err,
+    );
+  expect(noMeeting).toBeInstanceOf(ConvexError);
+  expect((noMeeting as ConvexError<string>).data).toBe("Voice channel has no meeting yet");
 
   await owner.as.mutation(internal.voiceChannels.recordMeetingCreated, {
     channelId,
@@ -468,4 +474,87 @@ test("backfillConnectPermission only touches default roles missing the bit", asy
   const customRole = roles.find((r) => r._id === customRoleId)!;
   expect(defaultRole.permissions & PERMISSIONS.CONNECT).not.toBe(0);
   expect(customRole.permissions & PERMISSIONS.CONNECT).toBe(0);
+});
+
+const RTK_ENV = {
+  CLOUDFLARE_ACCOUNT_ID: "acct",
+  REALTIMEKIT_APP_ID: "app",
+  CLOUDFLARE_API_TOKEN: "token",
+  REALTIMEKIT_PRESET_NAME: "group_call_participant",
+};
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
+});
+
+async function voiceChannelFixture() {
+  const t = convexTest(schema);
+  const owner = await createUser(t, "owner", "Owner");
+  const serverId = await owner.as.mutation(api.servers.createServer, { name: "Test Server" });
+  const channelId = await owner.as.mutation(api.channels.createChannel, {
+    serverId,
+    categoryId: await firstCategoryId(owner, serverId),
+    name: "voice",
+    type: "voice",
+  });
+  return { owner, channelId };
+}
+
+async function rejection(promise: Promise<unknown>) {
+  return promise.then(
+    () => null,
+    (err: unknown) => err,
+  );
+}
+
+test("ensureVoiceToken reports a missing RealtimeKit config as a readable ConvexError", async () => {
+  const { owner, channelId } = await voiceChannelFixture();
+  for (const [name, value] of Object.entries(RTK_ENV)) vi.stubEnv(name, value);
+  vi.stubEnv("REALTIMEKIT_PRESET_NAME", "");
+  const fetchMock = vi.fn();
+  vi.stubGlobal("fetch", fetchMock);
+
+  const err = await rejection(owner.as.action(api.voiceChannels.ensureVoiceToken, { channelId }));
+  expect(err).toBeInstanceOf(ConvexError);
+  expect((err as ConvexError<string>).data).toMatch(/not configured/);
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+
+test("ensureVoiceToken reports RealtimeKit API failures as a readable ConvexError", async () => {
+  const { owner, channelId } = await voiceChannelFixture();
+  for (const [name, value] of Object.entries(RTK_ENV)) vi.stubEnv(name, value);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(JSON.stringify({ errors: ["Authentication error"] }), { status: 401 })),
+  );
+  vi.spyOn(console, "error").mockImplementation(() => {});
+
+  const err = await rejection(owner.as.action(api.voiceChannels.ensureVoiceToken, { channelId }));
+  expect(err).toBeInstanceOf(ConvexError);
+  expect((err as ConvexError<string>).data).toBe(
+    "Voice service request failed (HTTP 401). Please try again.",
+  );
+});
+
+test("ensureVoiceToken creates the meeting and sends the configured preset", async () => {
+  const { owner, channelId } = await voiceChannelFixture();
+  for (const [name, value] of Object.entries(RTK_ENV)) vi.stubEnv(name, value);
+  const bodies: unknown[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string, init: RequestInit) => {
+      bodies.push(JSON.parse(init.body as string));
+      const data = url.endsWith("/meetings") ? { id: "meeting-1" } : { id: "p-1", token: "tok-1" };
+      return new Response(JSON.stringify({ success: true, data }), { status: 200 });
+    }),
+  );
+
+  await expect(
+    owner.as.action(api.voiceChannels.ensureVoiceToken, { channelId }),
+  ).resolves.toEqual({ authToken: "tok-1", rtkMeetingId: "meeting-1" });
+  expect(bodies[1]).toMatchObject({ preset_name: "group_call_participant" });
+
+  // The meeting now exists, so markJoined succeeds right after.
+  await owner.as.mutation(api.voiceChannels.markJoined, { channelId, beaconToken: "b-1" });
 });

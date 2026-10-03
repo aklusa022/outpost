@@ -45,11 +45,28 @@ See `wrangler.jsonc` (top-level config vs. the `env.dev` block) and `package.jso
 `build:vinext`/`deploy:vinext` (prod) vs. `build:vinext:dev`/`deploy:vinext:dev` (dev)
 scripts.
 
-Deploys are run from a checkout (`bun run build:vinext && bun run deploy:vinext`, plus
-`bunx convex deploy`). `.github/workflows/production-deployment.yml` then records each
-push to `main` as a GitHub **production** deployment, which is what puts the
-"Deployments → production → View deployment" link in the repo sidebar. The link's URL
-comes from the `PRODUCTION_URL` repository variable (defaults to `https://outpost.zenfora.io`).
+Production deploys run from GitHub Actions (`.github/workflows/deploy.yml`):
+
+- Every pull request and push to `main` runs lint, tests and `tsc --noEmit`.
+- Every push to `main` then runs `bunx convex deploy` (backend first) followed by
+  `bun run deploy:vinext` (build + Worker deploy to `outpost-app`), then checks the site
+  responds. The job runs in the GitHub `production` environment, which records it as a
+  production deployment ("Deployments → production → View deployment" in the repo
+  sidebar).
+
+The `production` environment needs these (Settings → Environments → `production`):
+
+| Name | Kind | Value |
+| --- | --- | --- |
+| `CLOUDFLARE_API_TOKEN` | secret | A Workers deploy token ("Edit Cloudflare Workers" template, plus DNS Edit on `zenfora.io` for the custom domain). Not the RealtimeKit token. |
+| `CLOUDFLARE_ACCOUNT_ID` | variable | The Cloudflare account ID. |
+| `CONVEX_DEPLOY_KEY` | secret | Convex dashboard → prod deployment → Settings → Generate Production Deploy Key. |
+| `PRODUCTION_URL` | variable, optional | Defaults to `https://outpost.zenfora.io`. |
+
+The build's `NEXT_PUBLIC_*` values are public and set in the workflow itself; keep them in
+sync with `wrangler.jsonc`'s top-level `vars`. Runtime secrets stay on their platforms:
+`CLERK_SECRET_KEY` on the Worker (`wrangler secret put`), everything else on the Convex
+deployment. Dev is still deployed by hand with `bun run deploy:vinext:dev`.
 
 ## Features
 
@@ -141,6 +158,30 @@ can change later with a single `convex env set`.
 
 Limits (`convex/chatLimits.ts`): 10 MB per file, 10 files per message, 2000-character
 messages; `html`/`svg`/`js` uploads are refused since the bucket is served publicly.
+
+## Voice (Cloudflare RealtimeKit)
+
+Voice channels use [Cloudflare RealtimeKit](https://developers.cloudflare.com/realtime/realtimekit/).
+All RealtimeKit API calls happen in Convex (`convex/voiceChannels.ts`), so its credentials
+live on the **Convex** deployment, not the Worker. Each deployment needs its own set
+(`--prod` for production):
+
+```bash
+npx convex env set CLOUDFLARE_ACCOUNT_ID <account-id>
+npx convex env set CLOUDFLARE_API_TOKEN <token>     # Realtime / RealtimeKit permission
+npx convex env set REALTIMEKIT_APP_ID <app-id>
+npx convex env set REALTIMEKIT_PRESET_NAME group_call_participant
+```
+
+The API token needs Realtime permission on the account, and the preset must exist in that
+RealtimeKit app. Check both with
+`GET https://api.cloudflare.com/client/v4/accounts/<account-id>/realtime/kit/<app-id>/presets`.
+**API tokens can expire**: when one does, every voice join fails with
+"Voice service request failed (HTTP 401)". Roll the token, then set the new one with
+`convex env set`. The Convex logs show the full RealtimeKit error.
+
+Once per deployment, register the RealtimeKit webhook that keeps rosters in sync:
+`npx convex run voiceChannels:registerWebhook [--prod]`.
 
 ## Testing
 
