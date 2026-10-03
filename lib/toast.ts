@@ -1,4 +1,5 @@
 import { createKumoToastManager } from "@cloudflare/kumo";
+import { ConvexError } from "convex/values";
 
 /**
  * App-wide Kumo toast manager. `<AppToaster>` (mounted in the root layout)
@@ -24,3 +25,13 @@ export const toast = {
     return toastManager.add({ ...normalize(input), variant: "default" });
   },
 };
+
+/**
+ * The user-facing message for a caught error. Prefers a `ConvexError`'s data:
+ * production Convex redacts plain `Error`s to "Server Error", so backend
+ * functions throw `ConvexError` for failures the user should see.
+ */
+export function errorMessage(err: unknown, fallback: string): string {
+  if (err instanceof ConvexError && typeof err.data === "string") return err.data;
+  return err instanceof Error ? err.message : fallback;
+}

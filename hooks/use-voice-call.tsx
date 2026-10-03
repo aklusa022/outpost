@@ -243,9 +243,14 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
 
       const beaconToken = crypto.randomUUID();
       beaconTokenRef.current = beaconToken;
-      // Record the join right away so other users' rosters update at click
-      // time rather than after WebRTC finishes. Also the authorization guard.
-      const markJoinedPromise = markJoined({ channelId, beaconToken });
+      // Record the join as soon as the channel has a meeting so other users'
+      // rosters update at click time rather than after WebRTC finishes. Also
+      // the authorization guard. With a cached token this runs immediately;
+      // on a channel's first-ever join it waits for ensureVoiceToken to
+      // create the meeting, which markJoined requires.
+      const markJoinedPromise = getToken(channelId).then(() =>
+        markJoined({ channelId, beaconToken }),
+      );
       markJoinedPromise.catch(() => {});
 
       let client: Meeting | undefined;
@@ -287,7 +292,16 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
         throw err;
       }
     },
-    [leave, markJoined, discardPrepared, initWithRetry, leaveVoiceChannel, reset, heartbeat],
+    [
+      leave,
+      getToken,
+      markJoined,
+      discardPrepared,
+      initWithRetry,
+      leaveVoiceChannel,
+      reset,
+      heartbeat,
+    ],
   );
 
   // Clears local state if the call ends from outside `leave()` — the stock

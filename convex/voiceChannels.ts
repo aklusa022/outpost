@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import {
   query,
   mutation,
@@ -23,15 +23,25 @@ const TOKEN_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 // client heartbeats every 20s, so this allows three missed beats.
 export const STALE_PARTICIPANT_MS = 60_000;
 
-async function rtkFetch(path: string, method: "GET" | "POST", body?: unknown) {
+// User-facing voice failures are thrown as ConvexError: a plain Error's
+// message is redacted to "Server Error" on production deployments, which
+// leaves the user (and us) with nothing to go on.
+function rtkConfig() {
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
   const appId = process.env.REALTIMEKIT_APP_ID;
   const token = process.env.CLOUDFLARE_API_TOKEN;
-  if (!accountId || !appId || !token) {
-    throw new Error(
-      "Cloudflare RealtimeKit is not configured (CLOUDFLARE_ACCOUNT_ID / REALTIMEKIT_APP_ID / CLOUDFLARE_API_TOKEN)",
+  const presetName = process.env.REALTIMEKIT_PRESET_NAME;
+  if (!accountId || !appId || !token || !presetName) {
+    console.error(
+      "Cloudflare RealtimeKit is not configured (CLOUDFLARE_ACCOUNT_ID / REALTIMEKIT_APP_ID / CLOUDFLARE_API_TOKEN / REALTIMEKIT_PRESET_NAME)",
     );
+    throw new ConvexError("Voice is not configured on this server. Please contact the admin.");
   }
+  return { accountId, appId, token, presetName };
+}
+
+async function rtkFetch(path: string, method: "GET" | "POST", body?: unknown) {
+  const { accountId, appId, token } = rtkConfig();
   const res = await fetch(
     `https://api.cloudflare.com/client/v4/accounts/${accountId}/realtime/kit/${appId}${path}`,
     {
@@ -50,9 +60,10 @@ async function rtkFetch(path: string, method: "GET" | "POST", body?: unknown) {
     errors?: unknown;
   };
   if (!res.ok || !json.success) {
-    throw new Error(
-      `RealtimeKit API error (${path}): ${JSON.stringify(json.error ?? json.errors ?? json)}`,
+    console.error(
+      `RealtimeKit API error (${method} ${path}, HTTP ${res.status}): ${JSON.stringify(json.error ?? json.errors ?? json)}`,
     );
+    throw new ConvexError(`Voice service request failed (HTTP ${res.status}). Please try again.`);
   }
   return json.data as Record<string, unknown>;
 }
@@ -124,8 +135,8 @@ export const assertCanJoin = internalQuery({
   handler: async (ctx, args) => {
     const me = await getCurrentUserOrThrow(ctx);
     const channel = await ctx.db.get(args.channelId);
-    if (!channel) throw new Error("Channel not found");
-    if (channel.type !== "voice") throw new Error("Not a voice channel");
+    if (!channel) throw new ConvexError("Channel not found");
+    if (channel.type !== "voice") throw new ConvexError("Not a voice channel");
     await requireChannelPermission(ctx, args.channelId, me._id, PERMISSIONS.CONNECT);
 
     const meeting = await getChannelMeeting(ctx, args.channelId);
@@ -266,7 +277,7 @@ export const ensureVoiceToken = action({
 
     const participant = await rtkFetch(`/meetings/${rtkMeetingId}/participants`, "POST", {
       name: me.displayName,
-      preset_name: process.env.REALTIMEKIT_PRESET_NAME,
+      preset_name: rtkConfig().presetName,
       custom_participant_id: me._id,
     });
     const authToken = participant.token as string;
@@ -350,11 +361,11 @@ export const markJoined = mutation({
   handler: async (ctx, args) => {
     const me = await getCurrentUserOrThrow(ctx);
     const channel = await ctx.db.get(args.channelId);
-    if (!channel) throw new Error("Channel not found");
-    if (channel.type !== "voice") throw new Error("Not a voice channel");
+    if (!channel) throw new ConvexError("Channel not found");
+    if (channel.type !== "voice") throw new ConvexError("Not a voice channel");
     await requireChannelPermission(ctx, args.channelId, me._id, PERMISSIONS.CONNECT);
     const meeting = await getChannelMeeting(ctx, args.channelId);
-    if (!meeting) throw new Error("Voice channel has no meeting yet");
+    if (!meeting) throw new ConvexError("Voice channel has no meeting yet");
     await upsertVoiceParticipant(ctx, {
       channelId: args.channelId,
       serverId: channel.serverId,
