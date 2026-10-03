@@ -25,7 +25,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { toast } from "@/lib/toast";
+import { errorMessage, toast } from "@/lib/toast";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -455,7 +455,7 @@ function ChannelLink({
     try {
       await join(channel._id, serverId);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to join the call");
+      toast.error(errorMessage(err, "Failed to join the call"));
     }
   }
 
